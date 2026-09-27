@@ -22,8 +22,11 @@
 |------|-------|
 | Demo app name | `Conversation Simulator Demo` |
 | Relationship to the base app | Steam **demo** of App **4963030** (created from the base app's Steamworks page); free; attached to the base store page |
-| Demo App ID | *(assigned by Valve when the demo is created — record in [`STEAM_APP_REGISTRATION.md`](STEAM_APP_REGISTRATION.md#identifiers))* |
-| Depots | Three, one per platform, mirroring the base app |
+| Registered | 2026-09-27, as a child app of publisher 342628 |
+| Demo App ID | *(read from the demo's App Admin landing page; recorded in [`STEAM_APP_REGISTRATION.md`](STEAM_APP_REGISTRATION.md#identifiers) and set as `STEAM_DEMO_APP_ID`)* |
+| Packages | Store package **1846149** (free, what "Download Demo" grants) · beta-testing package **1846148** (tester keys) · developer-comp package **1846147** (auto-granted to the publisher) |
+| Store item | **1348530** |
+| Depots | Three, one per platform, mirroring the base app — created next (step 1.2) |
 | Branches | `default` (what Next Fest players get), `beta` (internal verification) |
 | Build source | `release.yml` → **Run workflow** → `edition: demo`, from an existing release tag |
 | Upload | `steam-deploy.yml` with `edition: demo` (chained automatically from the demo build) |
@@ -38,7 +41,7 @@
 Do this once, before the first demo upload. Everything here is done by a
 partner-portal user with **Developer** (or higher) permissions on App 4963030.
 
-### 1.1 Create the demo app
+### 1.1 Create the demo app — done 2026-09-27
 
 1. Open **Steamworks → App Admin → 4963030 → Store Presence → Demo**
    (the "Manage Demo" tool on the base app's landing page).
@@ -49,6 +52,21 @@ partner-portal user with **Developer** (or higher) permissions on App 4963030.
 3. Do **not** try to make a `demo` branch of the paid app instead: a branch of
    a paid app is not free, cannot carry a separate store presence, and cannot
    be entered in Next Fest.
+
+What Valve created for us (partner-portal log, 2026-09-27):
+
+| Created | ID | Purpose |
+|---------|----|---------|
+| Child app of publisher 342628 | *(App ID — read it from the demo's App Admin landing page)* | The demo app itself; goes into `STEAM_DEMO_APP_ID`. |
+| Package `Conversation Simulator Demo` | 1846149 | The free store package — what the **Download Demo** button grants. Nothing to price. |
+| Package `Conversation Simulator Demo for Beta Testing` | 1846148 | Generate Steam keys from this package for testers of the demo's `beta` branch (Steamworks → Packages → 1846148 → Generate Steam Product Codes). |
+| Package `Conversation Simulator Demo Developer Comp` | 1846147 | Auto-granted to publisher 342628: every partner account already owns the demo, so the team can install staged builds without keys. |
+| Store item | 1348530 | The demo's store presence (its own page and the button on the base page). |
+
+The **App ID is not printed in that log**; it is on the demo's landing page
+(and in the URL of every demo App Admin page). Copy it into
+[`STEAM_APP_REGISTRATION.md`](STEAM_APP_REGISTRATION.md#identifiers) and into
+the `STEAM_DEMO_APP_ID` repository variable before the first upload.
 
 ### 1.2 Depots, launch options, install script
 
@@ -78,7 +96,9 @@ On the **demo** app (not the base app):
 
 ### 1.3 Packages and release state
 
-- Valve auto-creates a **free** store package for a demo; nothing to price.
+- Valve auto-created the **free** store package (1846149) with the demo;
+  nothing to price. Tester keys come from the beta-testing package (1846148);
+  the developer-comp package (1846147) is already granted to the publisher.
 - Set the demo's release state to **Coming Soon** until the demo gate passes,
   then release it (a demo may be live before the base app is — Next Fest, in
   fact, requires the demo to be playable during the fest while the base app is
