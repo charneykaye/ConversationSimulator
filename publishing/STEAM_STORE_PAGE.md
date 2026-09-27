@@ -537,6 +537,104 @@ This is a supplement to the compliance checklist (SR-07) in
 
 ---
 
+## Demo edition
+
+The free **Steam Next Fest demo** (issue #495) attaches to this store page as
+its demo; Valve renders the **Download Demo** button here and the demo has a
+short presence of its own. Everything above applies to the demo page too
+(G4-04, PR-01–PR-03, the content boundaries). What the demo is, and every
+decision behind it, is in
+[`docs/steam-next-fest-demo.md`](../docs/steam-next-fest-demo.md); the
+operational steps are in [`STEAM_NEXT_FEST_DEMO.md`](STEAM_NEXT_FEST_DEMO.md).
+
+### Demo app title
+
+```
+Conversation Simulator Demo
+```
+
+### Demo short description
+
+Limit: **300 characters**.
+
+```
+Try five real conversations — a job interview, a car negotiation, asking for
+a raise, a first ask, and Spanish at a café — with AI characters that run
+entirely on your computer. One model download, then everything works offline.
+```
+
+Character count: 236. Within the 300-character limit.
+
+### Demo long description
+
+```html
+<h2>Five conversations. Nothing to sign up for. Nothing leaves your computer.</h2>
+
+<p>
+  The Conversation Simulator demo lets you rehearse five real-life
+  conversations with AI characters who have their own agendas — and who will
+  not hand you the win. Download one AI model (about 2.5 GB) and everything
+  runs on your own machine. No account, no internet needed during play.
+</p>
+
+<h2>What is in the demo</h2>
+<ul>
+  <li><strong>The Behavioral Interview</strong> — a final-round interview with an engineering manager who probes vague answers.</li>
+  <li><strong>The Used Car Deal</strong> — negotiate a price with a sales rep who has a number he will not tell you.</li>
+  <li><strong>Making the Case</strong> — ask your manager for the raise you have earned, with evidence.</li>
+  <li><strong>The Coffee Cart</strong> — start a conversation with a classmate and read the room before you ask.</li>
+  <li><strong>Coffee at Café Sol</strong> — order and make small talk in Spanish with a patient barista.</li>
+</ul>
+<p>
+  Every conversation ends with a debrief: rubric scores, strengths, missed
+  opportunities, and what to try next time. Replay any of them at four
+  difficulty levels, as often as you like — there is no time or turn limit.
+</p>
+
+<h2>What the full game adds</h2>
+<ul>
+  <li>The complete scenario library — 20+ conversations across six packs, plus premium scenario packs.</li>
+  <li>The Creator Workbench: write and share your own scenarios, characters, and rubrics.</li>
+  <li>Model tiers, Ollama, and your own GGUF files for higher-quality characters.</li>
+  <li>Voice: speak your side and hear the reply, all processed on your machine.</li>
+</ul>
+<p>
+  Everything you practise in the demo carries over: the downloaded model, your
+  sessions, and your logbook stay on your computer and are picked up by the
+  full game.
+</p>
+
+<h2>Private by design</h2>
+<p>
+  The demo makes exactly one network request: the model download you start
+  yourself. Conversations, transcripts, and scores are stored only on your
+  device. There is no telemetry.
+</p>
+
+<p>
+  <em>Conversation Simulator is a practice tool. It is not therapy, counselling,
+  medical, legal, or financial advice.</em>
+</p>
+```
+
+### Demo copy rules
+
+- The demo is **text only**; do not mention voice as a demo feature.
+- Name the download size honestly (it is the registry starter model's size;
+  update the number if `CONVSIM_DEMO_MODEL_ID` changes the model).
+- The upsell list must match the in-app card word for word
+  (`apps/web/src/i18n/locales/en.ts`, `demo.upsell.bullets`).
+- The open-source / pricing wording of the base page is unchanged by the demo:
+  the demo is free because it is a demo, not because the Steam build is.
+
+### Demo assets
+
+Base capsules with a **"DEMO"** ribbon (same generator, same store-asset
+rules), demo-edition screenshots only, and the base trailer — see
+[`STEAM_NEXT_FEST_DEMO.md` — Assets](STEAM_NEXT_FEST_DEMO.md#42-assets).
+
+---
+
 ## Sign-off
 
 | Section | Reviewer | Date | Notes |

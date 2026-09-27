@@ -27,6 +27,7 @@
 | Depot contents and exclusions | [`publishing/STEAM_DEPOT_CONTENTS.md`](STEAM_DEPOT_CONTENTS.md) |
 | SteamPipe build, CI deploy, and troubleshooting | [`publishing/STEAM_PUBLISHING_AND_DEPLOYMENT.md`](STEAM_PUBLISHING_AND_DEPLOYMENT.md) |
 | **Steam review submission runbook** (store page, assets, content survey, release date, IARC) | [`publishing/STEAM_REVIEW_SUBMISSION.md`](STEAM_REVIEW_SUBMISSION.md) |
+| **Steam Next Fest demo** (demo app registration, demo build and upload, demo store page, Next Fest registration timeline) | [`publishing/STEAM_NEXT_FEST_DEMO.md`](STEAM_NEXT_FEST_DEMO.md) — decisions and demo gate in [`docs/steam-next-fest-demo.md`](../docs/steam-next-fest-demo.md) |
 | **Launch day runbook** (branch promotion, announcement, monitoring, rollback, known issues, triage owners) | [`publishing/LAUNCH_DAY_RUNBOOK.md`](LAUNCH_DAY_RUNBOOK.md) |
 | **Private beta feedback summary and accepted launch risks** | [`publishing/BETA_FEEDBACK_AND_LAUNCH_RISKS.md`](BETA_FEEDBACK_AND_LAUNCH_RISKS.md) |
 | **Rollback path and player support messaging** | [`publishing/ROLLBACK_AND_SUPPORT_MESSAGING.md`](ROLLBACK_AND_SUPPORT_MESSAGING.md) |
@@ -56,6 +57,7 @@ premium scenario-pack DLC; the checklist item numbers refer to
 | Base store package | Standard paid package for the base app — base depots only, must exclude premium DLC content |
 | Premium DLC packages | Paid Steam DLC for first-party scenario packs — each its own App ID and content depot, built and uploaded from the private `ConversationSimulator-DLC` repo |
 | In-app microtransaction package | None — no in-app payment UI or Steam Wallet microtransactions; paid content is delivered only via Steam's DLC storefront |
+| Demo | A separate **free demo app** attached to this one (Store Presence → Demo), built from the same source as the demo edition: one model download, five curated conversations. Entered in Steam Next Fest. See [`STEAM_NEXT_FEST_DEMO.md`](STEAM_NEXT_FEST_DEMO.md). |
 | Release state at registration | `Coming Soon` |
 
 ### Pricing and product invariants
@@ -72,6 +74,10 @@ premium scenario-pack DLC; the checklist item numbers refer to
 - All store copy, trailers, and screenshots must accurately represent the
   product's `$9.99` price and paid nature (gate G4-04 / checklist item SR-07 in
   the compliance register).
+- The free demo is free because it is a demo, not because the Steam build is.
+  Demo copy describes exactly what the demo contains and what the paid app
+  adds; it never implies the base app is free (gate D-09 in
+  [`docs/steam-next-fest-demo.md`](../docs/steam-next-fest-demo.md#demo-gate)).
 
 See [`publishing/STEAM_STORE_PAGE.md` — Pricing and open-source wording](STEAM_STORE_PAGE.md#pricing-and-open-source-wording)
 for the canonical approved copy to use wherever the product's pricing must be stated.

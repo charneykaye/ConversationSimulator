@@ -9,6 +9,7 @@ import { useTranslation } from '../../i18n'
 import type { UseSetupFlowReturn } from '../useSetupFlow'
 import type { SetupInstallStage } from '@convsim/shared'
 import { SETUP_DOCS_URL } from '../docsUrls'
+import { useIsDemo } from '../../edition'
 
 // The scripted tutorial scenario is internal test/dev content (issue #473) —
 // never advertise it as an upcoming mission.
@@ -73,6 +74,9 @@ function StageList({ stages }: { stages: SetupInstallStage[] }) {
 
 export function InstallingStep({ flow, mode }: InstallingStepProps) {
   const { t } = useTranslation()
+  // Demo edition (issue #495): there is no "different option" to choose —
+  // the curated model is the only one — so those escape hatches are hidden.
+  const isDemo = useIsDemo()
   // Real scenario previews for the while-you-wait section (wizard mode). The
   // built-in scenarios are served before any pack install completes, so this
   // renders early; on error the section simply stays hidden.
@@ -118,7 +122,7 @@ export function InstallingStep({ flow, mode }: InstallingStepProps) {
               </p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <PrimaryButton onClick={() => { flow.resetAction(); flow.setStep('confirm-install') }}>Retry</PrimaryButton>
-                <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>
+                {!isDemo && <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>}
                 <CopyDiagnosticsButton error={flow.actionError} context="setup-install:network" />
               </div>
             </div>
@@ -133,7 +137,7 @@ export function InstallingStep({ flow, mode }: InstallingStepProps) {
               </p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <PrimaryButton onClick={() => { flow.resetAction(); flow.setStep('confirm-install') }}>Try again</PrimaryButton>
-                <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>
+                {!isDemo && <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>}
                 <CopyDiagnosticsButton error={flow.actionError} context="setup-install:disk" />
               </div>
             </div>
@@ -163,7 +167,7 @@ export function InstallingStep({ flow, mode }: InstallingStepProps) {
               </p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <PrimaryButton onClick={() => { flow.resetAction(); flow.setStep('confirm-install') }}>Try again</PrimaryButton>
-                <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>
+                {!isDemo && <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>}
                 <CopyDiagnosticsButton error={flow.actionError} context="setup-install" />
               </div>
             </div>

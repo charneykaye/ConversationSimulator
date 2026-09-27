@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
+from convsim_core.edition import EDITION_RESTRICTED, demo_model_allowed, is_demo, resolve_demo_model_id
 from convsim_core.errors import ConvsimError
 from convsim_core.runtime import build_runtime, list_runtime_ids
 from convsim_core.runtime.ollama_adapter import OllamaChatRuntime
@@ -206,6 +207,24 @@ async def _detect_ollama_models() -> list[DetectedOllamaModel]:
         await client.aclose()
 
 
+def _require_demo_model(request: Request, registry_id: str) -> None:
+    """In the demo edition only the curated demo model may be installed (issue #495)."""
+    config = request.app.state.service_config
+    if not is_demo(config):
+        return
+    if not demo_model_allowed(request.app.state.db.connection(), config, registry_id):
+        raise ConvsimError(
+            code=EDITION_RESTRICTED,
+            message=(
+                f"Model '{registry_id}' is not available in the demo edition. "
+                "The demo installs one curated model; the full version of "
+                "Conversation Simulator adds the standard and high-quality tiers, "
+                "Ollama, and your own GGUF files."
+            ),
+            status_code=403,
+        )
+
+
 def _get_registry_row(conn: Any, registry_id: str) -> dict[str, Any] | None:
     row = conn.execute(
         "SELECT id, name, license_spdx, sha256, source_type, download_url FROM model_registry WHERE id = ?",
@@ -262,13 +281,21 @@ async def list_models(request: Request) -> ModelsResponse:
     conn = db.connection()
 
     registry_rows: list[dict[str, Any]] = list_registry_models(conn)
+    config = request.app.state.service_config
+    demo = is_demo(config)
+    if demo:
+        # The demo edition offers exactly one model — no tiers to choose from
+        # (issue #495). Everything else the registry knows stays hidden.
+        demo_model_id = resolve_demo_model_id(conn, config)
+        registry_rows = [row for row in registry_rows if row["id"] == demo_model_id]
     registry_entries = [ModelRegistryEntry(**row) for row in registry_rows]
 
     installed_rows = get_installed_models(conn)
     installed = [InstalledModelInfo(**row) for row in installed_rows]
 
     active_cfg = get_active_config(conn)
-    ollama_models = await _detect_ollama_models()
+    # Ollama is an advanced path the demo never surfaces; skip the probe too.
+    ollama_models = [] if demo else await _detect_ollama_models()
     runtime_health = await runtime.health()
 
     bm_row = get_most_recent_benchmark(conn)
@@ -438,6 +465,7 @@ async def install_model(request: Request, body: InstallModelRequest) -> InstallM
             message=f"Model '{body.registry_id}' not found in the local registry.",
             status_code=404,
         )
+    _require_demo_model(request, body.registry_id)
 
     if model["source_type"] == "user-supplied":
         raise ConvsimError(

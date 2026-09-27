@@ -37,6 +37,56 @@ export const en = {
     workbench: 'Workbench',
     settings: 'Settings',
     support: 'Support',
+    demoBadge: 'Demo',
+  },
+  // Demo edition (Steam Next Fest demo, issue #495).
+  demo: {
+    home: {
+      title: 'Conversation Simulator — Demo',
+      tagline: 'Five real conversations. One AI model, running entirely on your computer.',
+      noModel: {
+        heading: 'One download and you\'re in',
+        description:
+          'The demo needs its AI model on your computer. It downloads once, then everything runs offline.',
+        action: 'Install the demo model →',
+      },
+    },
+    conversations: {
+      heading: 'Your five conversations',
+      subheading:
+        'Each one is a real character with their own agenda. Play them in any order, as often as you like.',
+      loading: 'Loading conversations…',
+      error: 'Could not load the conversations. Restart the app and try again.',
+      empty: 'No conversations are available yet. Finish setup to unlock them.',
+      ordinal: 'Conversation {{n}}',
+      role: 'You play: {{role}}',
+      language: 'in {{code}}',
+      start: 'Start',
+      startLabel: 'Start {{title}}',
+    },
+    upsell: {
+      eyebrow: 'This is the demo',
+      heading: 'Get the full game',
+      body:
+        'You are playing five of the conversations. The full version of Conversation Simulator adds the rest — and everything you practise here carries over.',
+      bullets: {
+        library: 'The complete scenario library — 20+ conversations across six packs, plus premium packs',
+        workbench: 'The Creator Workbench: write and share your own scenarios, characters, and rubrics',
+        models: 'Model tiers, Ollama, and your own GGUF files for higher-quality characters',
+        voice: 'Voice: speak your side and hear the reply, all processed on your machine',
+      },
+      cta: 'View the full game on Steam',
+      carryOver:
+        'Your downloaded model, sessions, and logbook stay on this computer and are picked up by the full version.',
+    },
+    debrief: {
+      backHome: '← Back to conversations',
+    },
+    setup: {
+      setMeUpDescription:
+        'Downloads the demo\'s AI model ({{size}} GB, {{license}}). Works offline afterwards.',
+      badge: 'Demo',
+    },
   },
   home: {
     title: 'Conversation Simulator',

@@ -124,9 +124,36 @@ source files.
 | Linux/SteamOS depot ID | *(assigned in partner portal — set as repo variable)* | `vars.STEAM_DEPOT_LINUX_ID` | Third depot created; Linux x86-64 and Steam Deck content. |
 | Base package ID | *(record here after registration)* | *(not referenced in CI)* | The paid base package that grants the base app and its three platform depots. |
 | DLC App IDs | *(record here per pack)* | `vars.STEAM_DLC_APP_IDS` | One Steam App ID per premium scenario-pack DLC (comma-separated). Non-secret. DLC content is built and uploaded from the private `ConversationSimulator-DLC` repo — see [`docs/DLC_MODEL.md`](../docs/DLC_MODEL.md). |
+| Demo App ID | *(assigned when the demo is created from the base app's Store Presence → Demo page)* | `vars.STEAM_DEMO_APP_ID` | The free **Steam Next Fest demo** (issue #495) — a separate Steam app attached to the base app. See [Demo app](#demo-app). |
+| Demo Windows depot ID | *(assigned in partner portal — set as repo variable)* | `vars.STEAM_DEMO_DEPOT_WINDOWS_ID` | Demo app's Windows x86-64 depot. |
+| Demo macOS depot ID | *(assigned in partner portal — set as repo variable)* | `vars.STEAM_DEMO_DEPOT_MACOS_ID` | Demo app's macOS depot. |
+| Demo Linux/SteamOS depot ID | *(assigned in partner portal — set as repo variable)* | `vars.STEAM_DEMO_DEPOT_LINUX_ID` | Demo app's Linux x86-64 / Steam Deck depot. |
 
 **To set a repository variable:** GitHub → repository Settings → Secrets and
 variables → Actions → Variables tab → New repository variable.
+
+---
+
+## Demo app
+
+The free **Steam Next Fest demo** (issue #495) is a separate Steam app, created
+from the base app's **Store Presence → Demo** page so Valve links the two. It
+has its own App ID, its own three platform depots and its own builds and
+branches, and it is free (Valve auto-creates the free package). It is never a
+branch of the paid app: a paid app's branch cannot be free and cannot be
+entered in Next Fest.
+
+The demo's identifiers are stored in their own `STEAM_DEMO_*` repository
+variables (table above) so that `steam-deploy.yml` with `edition: demo` can
+never fall through to the paid app's depots — it refuses to run while any of
+the four is unset. The CI build account needs Developer permissions on the demo
+App ID as well as on 4963030; Valve does not inherit app permissions from a
+base app to its demo.
+
+Registration, depot and launch-option setup, the build and upload procedure,
+and the Next Fest registration timeline are in
+[`STEAM_NEXT_FEST_DEMO.md`](STEAM_NEXT_FEST_DEMO.md). What the demo contains
+and why is in [`docs/steam-next-fest-demo.md`](../docs/steam-next-fest-demo.md).
 
 ---
 
@@ -264,6 +291,11 @@ downloads. The following branches are used for Conversation Simulator.
 |--------|----------|------------|
 | `default` | All public players | Platform team, only after Stage 4 gate passes |
 | `beta` | Private beta testers (Stage 3) | Platform team, after Stage 3 gate passes |
+
+The **demo app** carries the same two branches, promoted by the same
+`steam-deploy.yml` with `edition: demo`; its `default` branch is what Next
+Fest players play and is set live only after the demo gate in
+[`docs/steam-next-fest-demo.md`](../docs/steam-next-fest-demo.md#demo-gate) passes.
 
 **Do not create additional branches** without updating this document and the
 deploy workflow.

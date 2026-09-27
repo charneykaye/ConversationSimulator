@@ -70,6 +70,21 @@ In a production build the Tauri shell:
 
 Model weights are **never** included in the bundle.
 
+### Editions
+
+The shell is compiled as one of two editions (issue #495):
+
+| Edition | How it is built | What differs |
+|---------|-----------------|--------------|
+| `full` (default) | `tauri build` as above | The complete app. |
+| `demo` | `CONVSIM_EDITION=demo` in the environment of both the web build (`VITE_CONVSIM_EDITION`) and `tauri build`, plus `--config src-tauri/tauri.demo.conf.json` | The Steam Next Fest demo: product name "Conversation Simulator Demo", its own bundle identifier, and `CONVSIM_EDITION=demo` handed to `convsim-core` at launch so the engine narrows itself to one model and five conversations. |
+
+`build.rs` rejects any other value. Whatever the edition, the shell keys the
+per-user data directory (`CONVSIM_DATA_ROOT`) to the **full** app's bundle
+identifier, so a model downloaded in the demo is reused by the full app. The
+release workflow's `edition` input drives all of this in CI — see
+[docs/steam-next-fest-demo.md](../../docs/steam-next-fest-demo.md).
+
 The repo ships **placeholder** app icons in `src-tauri/icons/` so the app
 compiles out of the box. Replace them before shipping a distributable:
 

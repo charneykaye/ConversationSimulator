@@ -11,6 +11,7 @@ from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from convsim_core.edition import EDITION_RESTRICTED, demo_scenario_allowed, is_demo
 from convsim_core.errors import ConvsimError
 from convsim_core.packs.exporter import export_to_zip
 from convsim_core.packs.importer import safe_extract_zip, import_from_folder, import_from_zip
@@ -57,6 +58,36 @@ def _is_within(path: Path, base: Path) -> bool:
         return False
 
 
+def _require_full_edition(request: Request) -> None:
+    """Refuse pack import in the demo edition (issue #495).
+
+    The demo plays exactly five curated conversations; importing packs is a
+    full-app feature. The UI never shows the affordance, so this only guards
+    hand-crafted requests against the local API.
+    """
+    if is_demo(request.app.state.service_config):
+        raise ConvsimError(
+            EDITION_RESTRICTED,
+            "Importing scenario packs is not available in the demo edition. "
+            "The full version of Conversation Simulator adds pack import, the "
+            "Creator Workbench, and the complete scenario library.",
+            status_code=403,
+        )
+
+
+def _demo_pack_counts(conn) -> dict[str, int]:
+    """Per-pack count of installed scenarios that are demo conversations."""
+    rows = conn.execute(
+        "SELECT p.slug AS pack_slug, s.slug AS scenario_slug "
+        "FROM scenarios s JOIN packs p ON s.pack_id = p.id"
+    ).fetchall()
+    counts: dict[str, int] = {}
+    for row in rows:
+        if demo_scenario_allowed(row["pack_slug"], row["scenario_slug"]):
+            counts[row["pack_slug"]] = counts.get(row["pack_slug"], 0) + 1
+    return counts
+
+
 @router.get("", response_model=_PacksListResponse)
 async def get_packs(request: Request) -> _PacksListResponse:
     """List all installed packs with scenario counts."""
@@ -85,6 +116,15 @@ async def get_packs(request: Request) -> _PacksListResponse:
         )
         for row in rows
     ]
+    if is_demo(request.app.state.service_config):
+        # The demo edition reports only the packs its five conversations come
+        # from, counting only those conversations (issue #495).
+        counts = _demo_pack_counts(conn)
+        items = [
+            item.model_copy(update={"scenario_count": counts[item.pack_id]})
+            for item in items
+            if item.pack_id in counts
+        ]
     return _PacksListResponse(packs=items, total=len(items))
 
 
@@ -108,6 +148,7 @@ async def import_pack_from_zip(
     file: Annotated[UploadFile, File(description="Pack zip archive")],
 ) -> ImportResult:
     """Import a pack from an uploaded zip file."""
+    _require_full_edition(request)
     config = request.app.state.service_config
     db = request.app.state.db
 
@@ -130,6 +171,7 @@ async def import_pack_from_folder(
     request: Request,
 ) -> ImportResult:
     """Import a pack from a local folder path (files are copied; source is not modified)."""
+    _require_full_edition(request)
     config = request.app.state.service_config
     db = request.app.state.db
 

@@ -5,6 +5,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
+from convsim_core.edition import demo_scenario_allowed, filter_demo_scenarios, is_demo
 from convsim_core.errors import ConvsimError
 from convsim_core.packs.models import ScenarioCard, ScenarioDetail
 from convsim_core.storage.repositories.scenario_repo import get_scenario_by_id, list_scenarios
@@ -25,7 +26,7 @@ async def get_scenarios(
 ) -> list[ScenarioCard]:
     """List installed scenarios with optional filters and full-text search."""
     conn = request.app.state.db.connection()
-    return list_scenarios(
+    cards = list_scenarios(
         conn,
         q=q,
         pack=pack,
@@ -35,6 +36,13 @@ async def get_scenarios(
         difficulty=difficulty,
         voice_support=voice_support,
     )
+    if is_demo(request.app.state.service_config):
+        # The demo edition serves exactly its five curated conversations, in
+        # curated order, whatever else is installed (issue #495).
+        return filter_demo_scenarios(
+            cards, pack_id=lambda c: c.pack_id, scenario_id=lambda c: c.scenario_id
+        )
+    return cards
 
 
 @router.get("/{scenario_id}", response_model=ScenarioDetail)
@@ -51,5 +59,9 @@ async def get_scenario(
 
     detail = get_scenario_by_id(conn, scenario_id, include_hidden=reveal_hidden)
     if detail is None:
+        raise ConvsimError("NOT_FOUND", f"Scenario '{scenario_id}' not found.", status_code=404)
+    if is_demo(config) and not demo_scenario_allowed(detail.pack_id, detail.scenario_id):
+        # Not "forbidden": in the demo the scenario simply does not exist, so
+        # a deep link cannot enumerate the full library.
         raise ConvsimError("NOT_FOUND", f"Scenario '{scenario_id}' not found.", status_code=404)
     return detail

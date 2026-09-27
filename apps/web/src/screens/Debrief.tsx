@@ -10,6 +10,8 @@ import { isDevModeEnabled, readVoiceInviteState, writeVoiceInviteState } from '.
 import { useTranslation, formatNumber } from '../i18n'
 import { useSteamAchievements, SteamAchievement, SteamStat } from '../hooks/useSteamAchievements'
 import { useScenarios } from '../api/useScenarios'
+import { useIsDemo } from '../edition'
+import DemoUpsellCard from '../components/DemoUpsellCard'
 
 type TranscriptEvent = {
   event_id: number
@@ -21,6 +23,10 @@ export default function Debrief() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
   const { t, locale } = useTranslation()
+  // Demo edition (issue #495): voice is not part of the demo, so the debrief
+  // ends with the one upsell card instead of the voice invite; "back" goes to
+  // the demo Home (the library route is not part of the demo).
+  const isDemo = useIsDemo()
 
   // Voice invite card: shown once after the first AI conversation's debrief.
   // Reads localStorage so "Maybe later" persists across relaunches. Every
@@ -157,11 +163,12 @@ export default function Debrief() {
   // buttons navigate away — leaves the state 'pending' and re-shows the card
   // after every subsequent real conversation. The explicit "Set up voice" /
   // "Maybe later" buttons overwrite this with 'setup'/'dismissed' when clicked.
+  // The demo never renders the invite, so it must not mark it seen either.
   useEffect(() => {
-    if (phase === 'loaded' && voiceInviteVisible) {
+    if (phase === 'loaded' && voiceInviteVisible && !isDemo) {
       writeVoiceInviteState('dismissed')
     }
-  }, [phase, voiceInviteVisible])
+  }, [phase, voiceInviteVisible, isDemo])
 
   const scrollToTurn = useCallback((turnNumber: number) => {
     const el = turnRefs.current.get(turnNumber)
@@ -264,7 +271,7 @@ export default function Debrief() {
   function handleReplayVariation() {
     const scenarioId = debrief?.scenario_id ?? exportedScenarioId
     if (!scenarioId) {
-      navigate('/library')
+      navigate(isDemo ? '/' : '/library')
       return
     }
     navigate(`/setup/${scenarioId}`)
@@ -292,7 +299,7 @@ export default function Debrief() {
           </p>
         </div>
         <button
-          onClick={() => navigate('/library')}
+          onClick={() => navigate(isDemo ? '/' : '/library')}
           style={{
             padding: '0.4rem 1rem',
             borderRadius: 6,
@@ -303,7 +310,7 @@ export default function Debrief() {
             fontSize: '0.875rem',
           }}
         >
-          {t('debrief.backToLibrary')}
+          {isDemo ? t('demo.debrief.backHome') : t('debrief.backToLibrary')}
         </button>
       </div>
 
@@ -460,7 +467,7 @@ export default function Debrief() {
               {exportingText ? t('debrief.actions.exporting') : t('debrief.actions.exportMarkdown')}
             </button>
             <button
-              onClick={() => navigate('/library')}
+              onClick={() => navigate(isDemo ? '/' : '/library')}
               style={{
                 padding: '0.5rem 1rem',
                 borderRadius: 6,
@@ -751,8 +758,10 @@ export default function Debrief() {
             </pre>
           </details>
 
+          {isDemo && <DemoUpsellCard compact />}
+
           {/* Voice invite card — shown once after the first real AI conversation */}
-          {voiceInviteVisible && (
+          {voiceInviteVisible && !isDemo && (
             <div
               data-testid="voice-invite-card"
               role="region"
@@ -876,7 +885,7 @@ export default function Debrief() {
               {exportingText ? t('debrief.actions.exporting') : t('debrief.actions.exportMarkdown')}
             </button>
             <button
-              onClick={() => navigate('/library')}
+              onClick={() => navigate(isDemo ? '/' : '/library')}
               style={{
                 padding: '0.5rem 1rem',
                 borderRadius: 6,

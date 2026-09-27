@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import Debrief from '../screens/Debrief'
@@ -830,5 +830,34 @@ describe('Debrief screen', () => {
       expect(titles.some((tt) => tt?.includes('Other Scenario'))).toBe(true)
       expect(titles.some((tt) => tt?.includes('Behavioral Interview'))).toBe(false)
     })
+  })
+})
+
+// ── Demo edition (issue #495) ─────────────────────────────────────────────────
+
+describe('demo edition', () => {
+  beforeEach(() => {
+    vi.stubEnv('VITE_CONVSIM_EDITION', 'demo')
+    mockReadVoiceInviteState.mockReturnValue('pending')
+    mockApi.generateDebrief.mockResolvedValue({ ok: true, data: fullDebriefResponse })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('ends with the upsell card instead of the voice invite', async () => {
+    renderDebrief()
+    await waitFor(() => expect(screen.getByTestId('demo-upsell-card')).toBeInTheDocument())
+    expect(screen.queryByTestId('voice-invite-card')).not.toBeInTheDocument()
+    // The invite was never shown, so it must not be marked as seen either.
+    expect(mockWriteVoiceInviteState).not.toHaveBeenCalled()
+  })
+
+  it('goes back to the demo Home rather than the library', async () => {
+    renderDebrief()
+    await waitFor(() => expect(screen.getByTestId('summary-section')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /back to conversations/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /back to library/i })).not.toBeInTheDocument()
   })
 })

@@ -936,3 +936,57 @@ describe('steam cloud sync section', () => {
     )
   })
 })
+
+// ── Demo edition (issue #495) ─────────────────────────────────────────────────
+
+describe('demo edition', () => {
+  // The demo trims Settings to the privacy controls every edition must keep
+  // (gate F-06): language, transcript saving, local folders, sessions and
+  // clear-data. Model tiers, voice, Steam Cloud, pack management, NPC memory,
+  // system health and the advanced toggles are full-app depth.
+  async function renderDemoSettings() {
+    vi.stubEnv('VITE_CONVSIM_EDITION', 'demo')
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    )
+    await waitFor(() => {
+      expect(mockApi.getFolders).toHaveBeenCalled()
+      expect(mockApi.listSessions).toHaveBeenCalled()
+    })
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('keeps the privacy controls', async () => {
+    await renderDemoSettings()
+    expect(screen.getByRole('heading', { name: /^language$/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^transcript$/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /local folders/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /clear local data/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /your sessions/i })).toBeInTheDocument()
+    expect(screen.getByRole('note', { name: /local-only notice/i })).toBeInTheDocument()
+  })
+
+  it('hides model tiers, voice, Steam Cloud, packs, NPC memory, system health and advanced', async () => {
+    await renderDemoSettings()
+    expect(screen.queryByRole('heading', { name: /^runtime$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /open model manager/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /voice output/i })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('steam-cloud-section')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /pack management/i })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('relationship-memory-section')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('settings-system-health')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /show advanced/i })).not.toBeInTheDocument()
+  })
+
+  it('does not call the full-app-only endpoints', async () => {
+    await renderDemoSettings()
+    expect(mockApi.listPacks).not.toHaveBeenCalled()
+    expect(mockApi.getRuntimeSettings).not.toHaveBeenCalled()
+    expect(mockApi.listVoices).not.toHaveBeenCalled()
+  })
+})

@@ -313,6 +313,10 @@ Conversation Simulator is **free and open source, and fairly priced**:
   The price funds continued development; it does not unlock anything the source
   build lacks. The Steam edition makes the same local-first guarantee as the
   open-source build.
+- **Steam demo — free.** A [demo edition](docs/steam-next-fest-demo.md) of the
+  Steam build — one model download, five curated conversations, nothing else —
+  ships as a separate free Steam app for Steam Next Fest. Everything you practise
+  in it carries over to the full game.
 - **Premium scenario-pack DLC — Steam only.** First-party expansion packs beyond
   the four free official ones are developed in a separate **private** repository
   and sold as paid Steam DLC. Their content is never in this public repository.

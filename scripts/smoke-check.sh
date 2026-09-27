@@ -152,6 +152,11 @@ check_file "publishing/STEAM_APP_REGISTRATION.md"
 check_file "docs/model-download-policy.md"
 check_file "docs/pack-download-policy.md"
 check_file ".github/workflows/steam-deploy.yml"
+# Steam Next Fest demo edition (issue #495): decision record, submission
+# runbook, and the Tauri config overlay the demo build leg applies.
+check_file "docs/steam-next-fest-demo.md"
+check_file "publishing/STEAM_NEXT_FEST_DEMO.md"
+check_file "apps/desktop/src-tauri/tauri.demo.conf.json"
 
 echo ""
 

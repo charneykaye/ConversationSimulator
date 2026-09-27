@@ -23,6 +23,7 @@ import httpx
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from convsim_core.edition import EDITION_RESTRICTED, demo_model_allowed, is_demo
 from convsim_core.errors import ConvsimError
 from convsim_core.packs.seeder import seed_official_packs
 from convsim_core.runtime.llama_cpp_download import DownloadProgress, download_binary
@@ -601,6 +602,18 @@ async def start_setup_install(
             code="MODEL_NOT_FOUND",
             message=f"Model '{body.registry_id}' not found in the local registry.",
             status_code=404,
+        )
+    config = request.app.state.service_config
+    if is_demo(config) and not demo_model_allowed(conn, config, body.registry_id):
+        # The demo edition installs exactly one curated model (issue #495).
+        raise ConvsimError(
+            code=EDITION_RESTRICTED,
+            message=(
+                f"Model '{body.registry_id}' is not available in the demo edition. "
+                "The demo installs one curated model; the full version adds the "
+                "standard and high-quality tiers, Ollama, and your own GGUF files."
+            ),
+            status_code=403,
         )
 
     model_label = f"Downloading {model_row['name']}"

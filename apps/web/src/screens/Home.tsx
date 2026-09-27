@@ -13,6 +13,9 @@ import { recommendNext } from '@convsim/shared'
 import RuntimeRecoveryCard from '../components/RuntimeRecoveryCard'
 import UpdateBanner from '../components/UpdateBanner'
 import { useAppUpdate } from '../hooks/useAppUpdate'
+import { useIsDemo } from '../edition'
+import DemoConversations from '../components/DemoConversations'
+import DemoUpsellCard from '../components/DemoUpsellCard'
 import type { BadgeStatus } from '@convsim/ui'
 
 const DOCS_URL = 'https://docs.conversationsimulator.com/'
@@ -30,6 +33,10 @@ export default function Home() {
   const loading = health.state === 'loading'
   const { t } = useTranslation()
   const { update, dismiss, install } = useAppUpdate()
+  // Demo edition (issue #495): Home IS the product — five conversations, the
+  // engine status, and one upsell. Library, workbench, logbook and the pack
+  // and model surfaces are not part of the demo.
+  const isDemo = useIsDemo()
 
   const [isRestartingSidecar, setIsRestartingSidecar] = useState(false)
   const [reseeding, setReseeding] = useState(false)
@@ -132,9 +139,15 @@ export default function Home() {
           onDismiss={dismiss}
         />
       )}
-      <h1>{t('home.title')}</h1>
-      <p>{t('home.tagline')}</p>
+      <h1>{isDemo ? t('demo.home.title') : t('home.title')}</h1>
+      <p>{isDemo ? t('demo.home.tagline') : t('home.tagline')}</p>
 
+      {isDemo ? (
+        <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          <DemoConversations />
+          <DemoUpsellCard />
+        </div>
+      ) : (
       <nav
         aria-label={t('home.primaryActions')}
         style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', maxWidth: '20rem' }}
@@ -150,7 +163,9 @@ export default function Home() {
           {t('home.readDocs')}
         </a>
       </nav>
+      )}
 
+      {!isDemo && (
       <section aria-label={t('home.yourTraining')} style={{ marginTop: '2rem' }}>
         <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem' }}>{t('home.yourTraining')}</h2>
         {logbook.state === 'loading' && (
@@ -247,7 +262,9 @@ export default function Home() {
           </div>
         )}
       </section>
+      )}
 
+      {!isDemo && (
       <section aria-label={t('home.trainingPlan.heading')} style={{ marginTop: '2rem' }}>
         <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem' }}>
           {t('home.trainingPlan.heading')}
@@ -296,6 +313,7 @@ export default function Home() {
           </ul>
         )}
       </section>
+      )}
 
       <section aria-label={t('home.readinessSection')} style={{ marginTop: '2rem' }}>
         <h2>{t('home.status.heading')}</h2>
@@ -312,34 +330,42 @@ export default function Home() {
           </li>
           <li>
             {t('home.status.llm')}:{' '}
-            <Link to="/settings" style={{ textDecoration: 'none' }}>
+            <Link to={isDemo ? '/model-manager' : '/settings'} style={{ textDecoration: 'none' }}>
               <StatusBadge status={llmBadgeProps.status}>{llmBadgeProps.label}</StatusBadge>
             </Link>
           </li>
+          {/* Voice is not part of the demo; its readiness rows would only invite a
+              download the demo never offers. */}
+          {!isDemo && (
           <li>
             {t('home.status.stt')}:{' '}
             <Link to="/settings" style={{ textDecoration: 'none' }}>
               <StatusBadge status={sttBadgeProps.status}>{sttBadgeProps.label}</StatusBadge>
             </Link>
           </li>
+          )}
+          {!isDemo && (
           <li>
             {t('home.status.tts')}:{' '}
             <Link to="/settings" style={{ textDecoration: 'none' }}>
               <StatusBadge status={ttsBadgeProps.status}>{ttsBadgeProps.label}</StatusBadge>
             </Link>
           </li>
+          )}
           <li>
             {t('home.status.networkRequired')}:{' '}
             <StatusBadge status={networkRequired ? 'offline' : 'online'}>
               {networkRequired ? t('home.status.yes') : t('home.status.no')}
             </StatusBadge>
           </li>
+          {!isDemo && (
           <li>
             {t('home.status.packs')}:{' '}
             <Link to="/library" style={{ textDecoration: 'none' }}>
               <StatusBadge status={packsBadgeStatus}>{packsBadgeLabel}</StatusBadge>
             </Link>
           </li>
+          )}
         </ul>
 
         {/* Recovery cards — anchored so the status strip can jump to them */}
@@ -408,7 +434,32 @@ export default function Home() {
         </div>
       </section>
 
-      {showNoModelPrompt && (
+      {showNoModelPrompt && isDemo && (
+        <section aria-label={t('demo.home.noModel.heading')} style={{ marginTop: '2rem' }}>
+          <h2>{t('demo.home.noModel.heading')}</h2>
+          <p style={{ color: '#a1a1aa', fontSize: '0.875rem', marginBottom: '1rem' }}>
+            {t('demo.home.noModel.description')}
+          </p>
+          <Link
+            to="/model-manager"
+            data-testid="demo-install-model-link"
+            style={{
+              fontSize: '0.875rem',
+              padding: '0.45rem 1rem',
+              borderRadius: '4px',
+              background: 'rgba(99,102,241,0.85)',
+              color: '#fff',
+              fontWeight: 600,
+              textDecoration: 'none',
+              display: 'inline-block',
+            }}
+          >
+            {t('demo.home.noModel.action')}
+          </Link>
+        </section>
+      )}
+
+      {showNoModelPrompt && !isDemo && (
         <section aria-label={t('home.getStartedSection')} style={{ marginTop: '2rem' }}>
           <h2>{t('home.noModel.heading')}</h2>
           <p style={{ color: '#a1a1aa', fontSize: '0.875rem', marginBottom: '1rem' }}>
@@ -534,6 +585,7 @@ export default function Home() {
                 ? t('home.missingPack.restoreFailed')
                 : t('home.missingPack.restoreAction')}
             </button>
+            {!isDemo && (
             <Link
               to="/library"
               style={{
@@ -548,6 +600,7 @@ export default function Home() {
             >
               {t('home.missingPack.action')}
             </Link>
+            )}
           </div>
         </section>
       )}

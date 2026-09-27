@@ -2,12 +2,13 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from convsim_core.config import ServiceConfig
 from convsim_core.data_migration import migrate, needs_migration
+from convsim_core.edition import require_full_edition
 from convsim_core.errors import (
     ConvsimError,
     convsim_error_handler,
@@ -182,7 +183,10 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
     app.include_router(packs_router.router)
     app.include_router(scenarios_router.router)
     app.include_router(sessions_router.router)
-    app.include_router(workbench_router.router)
+    # The Creator Workbench is a full-app feature; the demo edition hides it in
+    # the UI and refuses it here so a hand-crafted request cannot reach it
+    # (issue #495). The dependency is a no-op in the full edition.
+    app.include_router(workbench_router.router, dependencies=[Depends(require_full_edition)])
     app.include_router(workshop_router.router)
     app.include_router(logbook_router.router)
     app.include_router(relationship_memory_router.router)

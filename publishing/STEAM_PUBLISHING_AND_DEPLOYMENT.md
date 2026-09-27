@@ -115,6 +115,14 @@ for the detailed procedure to obtain each value.
 | `STEAM_DEPOT_WINDOWS_ID` | Windows x86-64 depot ID |
 | `STEAM_DEPOT_MACOS_ID` | macOS depot ID |
 | `STEAM_DEPOT_LINUX_ID` | Linux / SteamOS depot ID |
+| `STEAM_DEMO_APP_ID` | App ID of the free **Next Fest demo** app (a separate Steam app attached to the base app — see [`STEAM_NEXT_FEST_DEMO.md`](STEAM_NEXT_FEST_DEMO.md)) |
+| `STEAM_DEMO_DEPOT_WINDOWS_ID` | Demo app's Windows x86-64 depot ID |
+| `STEAM_DEMO_DEPOT_MACOS_ID` | Demo app's macOS depot ID |
+| `STEAM_DEMO_DEPOT_LINUX_ID` | Demo app's Linux / SteamOS depot ID |
+
+The four `STEAM_DEMO_*` variables are only read when the workflow runs with
+`edition: demo`; the workflow refuses to upload a demo while any of them is
+unset, so a demo payload can never land in the paid app's depots.
 
 **Repository secrets** (Settings → Secrets and variables → Actions → Secrets):
 
@@ -156,6 +164,8 @@ workflow.
 | `release_tag` | Yes | The GitHub release tag to upload (e.g. `v0.3.0`). The release must already exist and its build artifacts must be published. |
 | `build_description` | No | Human-readable description shown in Steamworks. Defaults to `Conversation Simulator <tag>`. |
 | `set_live_branch` | No | **Defaults to `beta`** (Stage 3 promotion). Clear the field for a staged (dry-run) upload that sets no branch live. Use `default` only for the public release — all Stage 4 gate items must be checked first. |
+| `run_id` | Yes | Run ID of the Release workflow whose `desktop-*` (or `demo-desktop-*`) build artifacts hold the depot payload. Releases carry no binaries, so the payload always comes from a build run. |
+| `edition` | No | `full` (default) uploads to the paid base app. `demo` uploads to the free Next Fest demo app (`STEAM_DEMO_APP_ID`) and takes its payload from the `demo-desktop-*` artifacts of a Release run started with `edition: demo`. See [`STEAM_NEXT_FEST_DEMO.md`](STEAM_NEXT_FEST_DEMO.md). |
 
 ### Workflow steps
 

@@ -29,5 +29,22 @@ fn main() {
         }
     }
 
+    // Product edition (issue #495). `lib.rs` bakes CONVSIM_EDITION into the
+    // binary with option_env! and hands it to convsim-core at launch. Rerun
+    // when it changes so switching between a demo and a full build never
+    // reuses a stale object, and reject anything but the two known values so
+    // a typo cannot silently produce a full build labelled as a demo.
+    println!("cargo:rerun-if-env-changed=CONVSIM_EDITION");
+    if let Ok(raw) = std::env::var("CONVSIM_EDITION") {
+        let edition = raw.trim();
+        if !edition.is_empty() && edition != "full" && edition != "demo" {
+            panic!(
+                "CONVSIM_EDITION must be \"full\" or \"demo\" (got {:?}). \
+                 See docs/steam-next-fest-demo.md.",
+                raw
+            );
+        }
+    }
+
     tauri_build::build()
 }

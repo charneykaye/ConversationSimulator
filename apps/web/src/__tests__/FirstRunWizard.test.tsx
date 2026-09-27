@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import FirstRunWizard from '../screens/FirstRunWizard'
@@ -1159,5 +1159,66 @@ describe('FirstRunWizard — load error state', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /back to welcome/i }))
     await screen.findByRole('heading', { name: /practice conversations that matter/i })
+  })
+})
+
+// ── Demo edition (issue #495) ─────────────────────────────────────────────────
+
+describe('FirstRunWizard — demo edition', () => {
+  // In the demo the engine serves exactly one registry model and the wizard
+  // offers exactly one road: Set me up. No Ollama, no GGUF, and a finished
+  // install lands on the demo Home (there is no library).
+  beforeEach(() => {
+    vi.stubEnv('VITE_CONVSIM_EDITION', 'demo')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('offers Set me up and no advanced Ollama / GGUF paths', () => {
+    renderWizard()
+    expect(screen.getByRole('button', { name: /set me up/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /advanced: use ollama or a local gguf file/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /browse ollama models/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /use a gguf file/i })).not.toBeInTheDocument()
+  })
+
+  it('describes the download as the demo model with size and license from the registry', async () => {
+    renderWizard()
+    expect(await screen.findByText(/downloads the demo's ai model \(2\.6 gb, apache-2\.0\)/i)).toBeInTheDocument()
+    expect(screen.getByText(/^demo$/i)).toBeInTheDocument()
+  })
+
+  it('installs the single registry model even when it is not the starter tier', async () => {
+    // CONVSIM_DEMO_MODEL_ID may pin another tier; the engine then returns only
+    // that model, and Set me up must install it rather than fall to "choose".
+    mockApi.getModels.mockResolvedValue({ ok: true, data: makeModelsResponse({
+      registry: [{ ...REGISTRY_ENTRY, id: 'qwen3-8b-instruct-q4_k_m', name: 'Qwen3 8B Instruct Q4_K_M', role: 'standard' }],
+    }) })
+    renderWizard()
+    fireEvent.click(screen.getByRole('button', { name: /set me up/i }))
+    await waitFor(() => expect(mockApi.startSetupInstall).toHaveBeenCalledWith('qwen3-8b-instruct-q4_k_m'))
+    expect(await screen.findByRole('heading', { name: /setting up your ai/i })).toBeInTheDocument()
+  })
+
+  it('lands on the demo Home when the install completes', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      renderWizard()
+      fireEvent.click(screen.getByRole('button', { name: /set me up/i }))
+      await screen.findByRole('heading', { name: /setting up your ai/i })
+      mockApi.getSetupInstallStatus.mockResolvedValue({ ok: true, data: {
+        ...RUNNING_JOB,
+        status: 'complete' as const,
+        stages: RUNNING_JOB.stages.map((s) => ({ ...s, state: 'complete' as const })),
+      } })
+      await vi.advanceTimersByTimeAsync(2000)
+      await waitFor(() => expect(screen.getByTestId('home-page')).toBeInTheDocument())
+      expect(screen.queryByTestId('library-page')).not.toBeInTheDocument()
+      expect(localStorage.getItem(SETUP_KEYS.firstRunComplete)).toBe('true')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

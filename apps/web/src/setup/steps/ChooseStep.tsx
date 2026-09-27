@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { SectionCard, CardHeading, CardDescription, ActionButton } from '../primitives'
 import type { UseSetupFlowReturn } from '../useSetupFlow'
+import { useIsDemo } from '../../edition'
 
 interface SpeedClass { label: string; color: string; detail: string }
 
@@ -21,6 +22,8 @@ interface ChooseStepProps {
 
 export function ChooseStep({ flow, mode }: ChooseStepProps) {
   const lb = flow.modelsData?.last_benchmark ?? null
+  // Demo edition (issue #495): the curated model is the only option.
+  const isDemo = useIsDemo()
 
   return (
     <div style={{ maxWidth: '640px', margin: mode === 'wizard' ? '2rem auto' : undefined, padding: mode === 'wizard' ? '0 1rem' : undefined }}>
@@ -75,6 +78,7 @@ export function ChooseStep({ flow, mode }: ChooseStepProps) {
           </li>
         )}
 
+        {!isDemo && (
         <li>
           <SectionCard>
             <CardHeading>Use existing Ollama model</CardHeading>
@@ -82,7 +86,9 @@ export function ChooseStep({ flow, mode }: ChooseStepProps) {
             <ActionButton onClick={() => { flow.resetAction(); flow.setStep('ollama-select') }}>Browse Ollama models</ActionButton>
           </SectionCard>
         </li>
+        )}
 
+        {!isDemo && (
         <li>
           <SectionCard>
             <CardHeading>Use a local GGUF file</CardHeading>
@@ -90,6 +96,7 @@ export function ChooseStep({ flow, mode }: ChooseStepProps) {
             <ActionButton onClick={() => { flow.setGgufPath(''); flow.setGgufPathError(null); flow.resetAction(); flow.setStep('gguf-path') }}>Use a GGUF file</ActionButton>
           </SectionCard>
         </li>
+        )}
       </ul>
 
       {mode === 'manager' && (

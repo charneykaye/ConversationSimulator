@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, field_validator
 
+from convsim_core.edition import EDITION_RESTRICTED, demo_scenario_id_allowed, is_demo
 from convsim_core.runtime import build_runtime
 from convsim_core.runtime.active import (
     MODEL_FREE_RUNTIME_IDS,
@@ -402,6 +403,21 @@ def _resolve_runtime(request: Request, setup: Dict[str, Any]) -> ChatRuntime:
 
 @router.post("", status_code=201, response_model=SessionResponse)
 async def create_session(body: SessionCreateRequest, request: Request) -> SessionResponse:
+    if is_demo(request.app.state.service_config) and not demo_scenario_id_allowed(body.scenario_id):
+        # The demo edition plays exactly its five curated conversations
+        # (issue #495). Checked before resolution so the built-in catalogue
+        # cannot be reached around the scenario library either.
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": (
+                    f"Scenario {body.scenario_id!r} is not part of the demo. "
+                    "The full version of Conversation Simulator includes the "
+                    "complete scenario library."
+                ),
+                "code": EDITION_RESTRICTED,
+            },
+        )
     info = resolve_scenario_info(body.scenario_id, request.app.state.db.connection())
     if info is None:
         raise HTTPException(status_code=400, detail=f"Unknown scenario_id: {body.scenario_id!r}")

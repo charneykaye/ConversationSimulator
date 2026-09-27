@@ -12,6 +12,7 @@ import VoiceSettingsPanel from '../components/VoiceSettingsPanel'
 import { useTranslation, formatDate, SUPPORTED_LOCALES } from '../i18n'
 import { RemediationCard } from '../setup/RemediationCard'
 import { openExternal } from '../lib/openExternal'
+import { useIsDemo } from '../edition'
 import type { PreflightResponse, PreflightFixAction } from '@convsim/shared'
 
 type ClearState = 'idle' | 'confirming' | 'clearing' | 'done' | 'error'
@@ -89,6 +90,12 @@ const LOCALE_DISPLAY_NAMES: Record<string, string> = {
 export default function Settings() {
   const { t, locale, setLocale } = useTranslation()
   const navigate = useNavigate()
+  // Demo edition (issue #495): Settings keeps language, transcript saving,
+  // local folders, sessions and clear-data — the privacy controls every
+  // edition must have (gate F-06). Runtime/model tiers, voice, Steam Cloud,
+  // pack management, NPC memory, system health and the advanced toggles are
+  // full-app depth and are not rendered.
+  const isDemo = useIsDemo()
 
   const [saveTranscripts, setSaveTranscripts] = useState(() => readPrivacyPref(PRIVACY_KEYS.saveTranscripts, true))
   const [saveTtsCache, setSaveTtsCache] = useState(() => readPrivacyPref(PRIVACY_KEYS.saveTtsCache, true))
@@ -192,7 +199,8 @@ export default function Settings() {
     })
   }, [])
 
-  useEffect(() => { loadInstalledPacks() }, [loadInstalledPacks])
+  // Pack management is not part of the demo edition; skip the request too.
+  useEffect(() => { if (!isDemo) loadInstalledPacks() }, [loadInstalledPacks, isDemo])
 
   async function handleImportPack(file: File) {
     setPackImportState('uploading')
@@ -427,6 +435,7 @@ export default function Settings() {
       </section>
 
       {/* Runtime settings */}
+      {!isDemo && (
       <section style={{ marginBottom: '2rem' }}>
         <SectionHeading>{t('settings.runtime.heading')}</SectionHeading>
         <p style={{ fontSize: '0.875rem', color: '#a1a1aa', marginBottom: '0.75rem' }}>
@@ -441,8 +450,10 @@ export default function Settings() {
         </p>
         <RuntimeSettingsPanel />
       </section>
+      )}
 
       {/* Voice output */}
+      {!isDemo && (
       <section style={{ marginBottom: '2rem' }}>
         <SectionHeading>{t('settings.voice.heading')}</SectionHeading>
         <PrivacyToggle
@@ -454,8 +465,10 @@ export default function Settings() {
         />
         <VoiceSettingsPanel />
       </section>
+      )}
 
       {/* Steam Cloud sync */}
+      {!isDemo && (
       <section
         aria-label={t('settings.steamCloud.heading')}
         data-testid="steam-cloud-section"
@@ -508,8 +521,10 @@ export default function Settings() {
           </ul>
         </div>
       </section>
+      )}
 
       {/* Pack management */}
+      {!isDemo && (
       <section style={{ marginBottom: '2rem' }}>
         <SectionHeading>{t('settings.packs.heading')}</SectionHeading>
         <p style={{ fontSize: '0.875rem', color: '#a1a1aa', marginBottom: '0.75rem' }}>
@@ -601,6 +616,7 @@ export default function Settings() {
           </ul>
         )}
       </section>
+      )}
 
       {/* Local folders */}
       <section style={{ marginBottom: '2rem' }}>
@@ -895,6 +911,7 @@ export default function Settings() {
       </section>
 
       {/* NPC relationship memory */}
+      {!isDemo && (
       <section style={{ marginBottom: '2rem' }} data-testid="relationship-memory-section">
         <SectionHeading>{t('settings.relationshipMemory.heading')}</SectionHeading>
         <p style={{ fontSize: '0.875rem', color: '#a1a1aa', marginBottom: '0.75rem' }}>
@@ -991,8 +1008,10 @@ export default function Settings() {
           </>
         )}
       </section>
+      )}
 
       {/* System health */}
+      {!isDemo && (
       <section data-testid="settings-system-health">
         <SectionHeading>{t('setup.systemHealth.heading')}</SectionHeading>
         <button
@@ -1057,8 +1076,10 @@ export default function Settings() {
           )
         })()}
       </section>
+      )}
 
       {/* Advanced */}
+      {!isDemo && (
       <section>
         <button
           onClick={() => setShowAdvanced((v) => !v)}
@@ -1114,6 +1135,7 @@ export default function Settings() {
           </div>
         )}
       </section>
+      )}
     </div>
   )
 }

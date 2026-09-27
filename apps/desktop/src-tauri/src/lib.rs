@@ -12,6 +12,24 @@ use tauri_plugin_shell::ShellExt;
 
 mod steam;
 
+// ── Edition and data root ─────────────────────────────────────────────────────
+
+/// Bundle identifier of the full app. The per-user data root is derived from
+/// this constant for EVERY edition so the demo and the full app share one
+/// data directory (see `launch_or_verify_core`). Must match `identifier` in
+/// `tauri.conf.json`.
+const DATA_ROOT_IDENTIFIER: &str = "com.outrightmental.convsim";
+
+/// Product edition compiled into this binary: `Some("demo")` for the Steam
+/// Next Fest demo, `None` for the full app. Read from the CONVSIM_EDITION
+/// build-time environment variable, which `build.rs` validates.
+fn build_edition() -> Option<&'static str> {
+    match option_env!("CONVSIM_EDITION") {
+        Some("demo") => Some("demo"),
+        _ => None,
+    }
+}
+
 // ── Status events emitted to the front-end ────────────────────────────────────
 
 #[derive(Clone, serde::Serialize)]
@@ -560,8 +578,24 @@ fn launch_or_verify_core(
         // for GBs of model files and private conversation data. app_local_data_dir()
         // resolves to %LOCALAPPDATA%, matching paths.py's Windows convention.
         // On macOS and Linux the two are identical.
-        if let Ok(data_dir) = app.path().app_local_data_dir() {
-            cmd.env("CONVSIM_DATA_ROOT", &data_dir);
+        //
+        // The directory is keyed by DATA_ROOT_IDENTIFIER, not the bundle's own
+        // identifier: the Steam Next Fest demo (issue #495) is a separate Steam
+        // app with its own bundle identifier, and it must share this directory
+        // with the full app so the model a player downloaded in the demo (and
+        // their sessions and logbook) are picked up by the full version instead
+        // of being downloaded again. For the full app the two are the same path.
+        if let Ok(local_data) = app.path().local_data_dir() {
+            cmd.env("CONVSIM_DATA_ROOT", local_data.join(DATA_ROOT_IDENTIFIER));
+        }
+
+        // Product edition (issue #495). A demo build is compiled with
+        // CONVSIM_EDITION=demo in its environment (see build.rs); it hands the
+        // same value to convsim-core so the engine narrows itself to the demo's
+        // one model and five conversations. Unset = the full app, and nothing
+        // is passed so the engine's own default applies.
+        if let Some(edition) = build_edition() {
+            cmd.env("CONVSIM_EDITION", edition);
         }
 
         // Tell convsim-core where the bundled sidecar binaries live so it can

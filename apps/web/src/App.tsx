@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { I18nProvider } from './i18n'
+import { EditionProvider, useIsDemo } from './edition'
 import { installExternalLinkHandler } from './lib/openExternal'
 import AppLayout from './layout/AppLayout'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -155,6 +156,37 @@ function FirstRunGuard() {
   )
 }
 
+// The demo edition (issue #495) has no Scenario Library, Creator Workbench or
+// Logbook: the five conversations live on Home, and everything else is the
+// full app's. Those routes collapse to Home rather than 404 so a stale link
+// (a debrief's "back to library", a bookmark) always lands somewhere sensible.
+// The engine refuses the underlying data in the demo regardless.
+function AppRoutes() {
+  const isDemo = useIsDemo()
+  const home = <Navigate to="/" replace />
+  return (
+    <Routes>
+      {/* First-run wizard shown outside the main app layout */}
+      <Route path="/first-run" element={<FirstRunWizard />} />
+
+      <Route element={<AppLayout />}>
+        <Route element={<FirstRunGuard />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/library" element={isDemo ? home : <ScenarioLibrary />} />
+          <Route path="/setup/:scenarioId" element={<ScenarioSetup />} />
+          <Route path="/conversation/:sessionId" element={<Conversation />} />
+          <Route path="/debrief/:sessionId" element={<Debrief />} />
+          <Route path="/workbench" element={isDemo ? home : <CreatorWorkbench />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/model-manager" element={<ModelManager />} />
+          <Route path="/support" element={<Support />} />
+          <Route path="/logbook" element={isDemo ? home : <Logbook />} />
+        </Route>
+      </Route>
+    </Routes>
+  )
+}
+
 export default function App() {
   // In the desktop shell, route external-link clicks through the OS browser;
   // the webview swallows target="_blank" navigations otherwise. No-op in a
@@ -163,29 +195,13 @@ export default function App() {
 
   return (
     <I18nProvider>
+    <EditionProvider>
     <ErrorBoundary>
       <CoreStartupGuard>
-        <Routes>
-          {/* First-run wizard shown outside the main app layout */}
-          <Route path="/first-run" element={<FirstRunWizard />} />
-
-          <Route element={<AppLayout />}>
-            <Route element={<FirstRunGuard />}>
-              <Route path="/" element={<Home />} />
-              <Route path="/library" element={<ScenarioLibrary />} />
-              <Route path="/setup/:scenarioId" element={<ScenarioSetup />} />
-              <Route path="/conversation/:sessionId" element={<Conversation />} />
-              <Route path="/debrief/:sessionId" element={<Debrief />} />
-              <Route path="/workbench" element={<CreatorWorkbench />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/model-manager" element={<ModelManager />} />
-              <Route path="/support" element={<Support />} />
-              <Route path="/logbook" element={<Logbook />} />
-            </Route>
-          </Route>
-        </Routes>
+        <AppRoutes />
       </CoreStartupGuard>
     </ErrorBoundary>
+    </EditionProvider>
     </I18nProvider>
   )
 }
