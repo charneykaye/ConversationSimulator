@@ -124,10 +124,10 @@ source files.
 | Linux/SteamOS depot ID | *(assigned in partner portal — set as repo variable)* | `vars.STEAM_DEPOT_LINUX_ID` | Third depot created; Linux x86-64 and Steam Deck content. |
 | Base package ID | *(record here after registration)* | *(not referenced in CI)* | The paid base package that grants the base app and its three platform depots. |
 | DLC App IDs | *(record here per pack)* | `vars.STEAM_DLC_APP_IDS` | One Steam App ID per premium scenario-pack DLC (comma-separated). Non-secret. DLC content is built and uploaded from the private `ConversationSimulator-DLC` repo — see [`docs/DLC_MODEL.md`](../docs/DLC_MODEL.md). |
-| Demo App ID | *(registered 2026-09-27 as a child app of publisher 342628 — read it from the demo's App Admin landing page and record it here)* | `vars.STEAM_DEMO_APP_ID` | The free **Steam Next Fest demo** (issue #495) — a separate Steam app attached to the base app. See [Demo app](#demo-app). |
-| Demo Windows depot ID | *(create the depot in the demo's App Admin → Depots, then record it here and set the repo variable)* | `vars.STEAM_DEMO_DEPOT_WINDOWS_ID` | Demo app's Windows x86-64 depot. |
-| Demo macOS depot ID | *(create the depot, then record it here and set the repo variable)* | `vars.STEAM_DEMO_DEPOT_MACOS_ID` | Demo app's macOS depot. |
-| Demo Linux/SteamOS depot ID | *(create the depot, then record it here and set the repo variable)* | `vars.STEAM_DEMO_DEPOT_LINUX_ID` | Demo app's Linux x86-64 / Steam Deck depot. |
+| Demo App ID | **5343430** | `vars.STEAM_DEMO_APP_ID` | The free **Steam Next Fest demo** (issue #495) — a separate Steam app attached to the base app, registered 2026-09-27 under publisher 342628. See [Demo app](#demo-app). |
+| Demo Windows depot ID | **5343431** — Valve created it as `Conversation Simulator Demo Content` with OS = All; reconfigure it as the **Windows x86-64** depot (see [Demo app](#demo-app)) | `vars.STEAM_DEMO_DEPOT_WINDOWS_ID` | Demo app's Windows x86-64 depot. Already attached to all three demo packages. |
+| Demo macOS depot ID | *(add a depot with OS = macOS in the demo's App Admin → Depots — expected 5343432 — attach it to the three demo packages, record it here, set the repo variable)* | `vars.STEAM_DEMO_DEPOT_MACOS_ID` | Demo app's macOS depot. |
+| Demo Linux/SteamOS depot ID | *(add a depot with OS = Linux — expected 5343433 — attach it to the three demo packages, record it here, set the repo variable)* | `vars.STEAM_DEMO_DEPOT_LINUX_ID` | Demo app's Linux x86-64 / Steam Deck depot. |
 | Demo store package ID | **1846149** (`Conversation Simulator Demo`) | *(not referenced in CI)* | The free package Valve created with the demo; it is what "Download Demo" grants. |
 | Demo beta-testing package ID | **1846148** (`Conversation Simulator Demo for Beta Testing`) | *(not referenced in CI)* | Generate Steam keys from this package for demo testers (`beta` branch verification). |
 | Demo developer-comp package ID | **1846147** (`Conversation Simulator Demo Developer Comp`) | *(not referenced in CI)* | Auto-granted to publisher 342628 — every partner account already owns the demo. |
@@ -147,12 +147,38 @@ branches, and it is free (Valve auto-creates the free package). It is never a
 branch of the paid app: a paid app's branch cannot be free and cannot be
 entered in Next Fest.
 
-The demo app was registered on 2026-09-27 under publisher **342628**: Valve
-created the app, its store item (**1348530**) and three packages — the free
-store package (**1846149**), a beta-testing package for tester keys
-(**1846148**), and a developer-comp package (**1846147**) auto-granted to the
-publisher. The App ID and the three depot IDs are recorded in the table above
-as they are read from the partner portal.
+The demo app was registered on 2026-09-27 under publisher **342628** as App
+**5343430**: Valve created the app, its store item (**1348530**), three
+packages — the free store package (**1846149**), a beta-testing package for
+tester keys (**1846148**), and a developer-comp package (**1846147**)
+auto-granted to the publisher — and **one** depot, **5343431**
+`Conversation Simulator Demo Content`, with OS = All, referenced by all three
+packages.
+
+The deploy pipeline uploads **three per-platform depots** (one depot VDF per
+OS, each with its own content root), exactly as for the base app, so the
+auto-created single depot is reshaped rather than used as-is:
+
+1. **App Admin → 5343430 → Depots → 5343431 → Edit:** rename it
+   `Conversation Simulator Demo — Windows` and set **OS = Windows**
+   (x86-64). It stays attached to packages 1846147, 1846148 and 1846149.
+   Record it as `STEAM_DEMO_DEPOT_WINDOWS_ID`.
+2. **Add Depot** twice: `Conversation Simulator Demo — macOS` (OS = macOS) and
+   `Conversation Simulator Demo — Linux` (OS = Linux). Valve assigns the IDs
+   sequentially after the App ID (expected 5343432 and 5343433 — confirm in
+   the portal). Add **both** to each of the three packages (**Packages →
+   1846147 / 1846148 / 1846149 → Add depot**); a depot that is not in the
+   store package never reaches players.
+3. **Publish** the app configuration (App Admin → Publish → Prepare for
+   Publishing → Publish to Steam) — depot changes are not live until then,
+   and `steamcmd` cannot upload to a depot the published config does not list.
+4. Record the two new IDs in the table above and set the four
+   `STEAM_DEMO_*` repository variables.
+
+Do not leave a single OS = All depot: every player would download all three
+platforms' binaries, and the per-OS launch options in [Demo app launch
+options](STEAM_NEXT_FEST_DEMO.md#12-depots-launch-options-install-script)
+assume per-platform depots.
 
 The demo's identifiers are stored in their own `STEAM_DEMO_*` repository
 variables (table above) so that `steam-deploy.yml` with `edition: demo` can

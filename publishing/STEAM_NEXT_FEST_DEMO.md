@@ -23,10 +23,10 @@
 | Demo app name | `Conversation Simulator Demo` |
 | Relationship to the base app | Steam **demo** of App **4963030** (created from the base app's Steamworks page); free; attached to the base store page |
 | Registered | 2026-09-27, as a child app of publisher 342628 |
-| Demo App ID | *(read from the demo's App Admin landing page; recorded in [`STEAM_APP_REGISTRATION.md`](STEAM_APP_REGISTRATION.md#identifiers) and set as `STEAM_DEMO_APP_ID`)* |
+| Demo App ID | **5343430** (`STEAM_DEMO_APP_ID`) — store page `https://store.steampowered.com/app/5343430/` once live |
 | Packages | Store package **1846149** (free, what "Download Demo" grants) · beta-testing package **1846148** (tester keys) · developer-comp package **1846147** (auto-granted to the publisher) |
 | Store item | **1348530** |
-| Depots | Three, one per platform, mirroring the base app — created next (step 1.2) |
+| Depots | Three, one per platform, mirroring the base app. Valve auto-created **5343431** (`Conversation Simulator Demo Content`, OS = All): reconfigure it as the Windows depot and add macOS and Linux depots — step 1.2 |
 | Branches | `default` (what Next Fest players get), `beta` (internal verification) |
 | Build source | `release.yml` → **Run workflow** → `edition: demo`, from an existing release tag |
 | Upload | `steam-deploy.yml` with `edition: demo` (chained automatically from the demo build) |
@@ -57,23 +57,36 @@ What Valve created for us (partner-portal log, 2026-09-27):
 
 | Created | ID | Purpose |
 |---------|----|---------|
-| Child app of publisher 342628 | *(App ID — read it from the demo's App Admin landing page)* | The demo app itself; goes into `STEAM_DEMO_APP_ID`. |
+| Child app of publisher 342628 | **5343430** | The demo app itself; goes into `STEAM_DEMO_APP_ID`. |
+| Depot `Conversation Simulator Demo Content` (OS = All) | **5343431** | Auto-created and attached to all three packages. Reshaped into the Windows depot in step 1.2. |
 | Package `Conversation Simulator Demo` | 1846149 | The free store package — what the **Download Demo** button grants. Nothing to price. |
 | Package `Conversation Simulator Demo for Beta Testing` | 1846148 | Generate Steam keys from this package for testers of the demo's `beta` branch (Steamworks → Packages → 1846148 → Generate Steam Product Codes). |
 | Package `Conversation Simulator Demo Developer Comp` | 1846147 | Auto-granted to publisher 342628: every partner account already owns the demo, so the team can install staged builds without keys. |
 | Store item | 1348530 | The demo's store presence (its own page and the button on the base page). |
 
-The **App ID is not printed in that log**; it is on the demo's landing page
-(and in the URL of every demo App Admin page). Copy it into
-[`STEAM_APP_REGISTRATION.md`](STEAM_APP_REGISTRATION.md#identifiers) and into
-the `STEAM_DEMO_APP_ID` repository variable before the first upload.
+The App ID is not printed in that log; it is on the demo's landing page (and
+in the URL of every demo App Admin page): **5343430**. It is recorded in
+[`STEAM_APP_REGISTRATION.md`](STEAM_APP_REGISTRATION.md#identifiers) and goes
+into the `STEAM_DEMO_APP_ID` repository variable.
 
 ### 1.2 Depots, launch options, install script
 
 On the **demo** app (not the base app):
 
-- **Depots:** create exactly three — Windows x86-64, macOS, Linux/SteamOS —
-  in the same order as the base app. Record each depot ID.
+- **Depots:** exactly three — Windows x86-64, macOS, Linux/SteamOS — in the
+  same order as the base app. Valve auto-created a single all-OS depot,
+  **5343431** `Conversation Simulator Demo Content`, attached to all three
+  packages; do not upload to it as-is (every player would download every
+  platform's binaries). Instead:
+  1. Edit 5343431: rename `Conversation Simulator Demo — Windows`, OS =
+     Windows. This is `STEAM_DEMO_DEPOT_WINDOWS_ID`.
+  2. Add `Conversation Simulator Demo — macOS` (OS = macOS) and
+     `Conversation Simulator Demo — Linux` (OS = Linux) — expected IDs
+     5343432 and 5343433; confirm in the portal.
+  3. Attach both new depots to packages 1846147, 1846148 and 1846149.
+  4. Publish the app configuration (App Admin → Publish). Depot changes are
+     not live — and `steamcmd` cannot target them — until published.
+  Record the three IDs in [`STEAM_APP_REGISTRATION.md`](STEAM_APP_REGISTRATION.md#identifiers).
 - **Launch options** are the same shape as the base app's. The demo bundle is
   named after its product name, so the macOS executable path differs:
 
@@ -114,13 +127,13 @@ fall through to the paid app's depots — `steam-deploy.yml` refuses to run
 
 | Variable | Value |
 |----------|-------|
-| `STEAM_DEMO_APP_ID` | The demo App ID from step 1.1 |
-| `STEAM_DEMO_DEPOT_WINDOWS_ID` | The demo's Windows depot ID |
-| `STEAM_DEMO_DEPOT_MACOS_ID` | The demo's macOS depot ID |
-| `STEAM_DEMO_DEPOT_LINUX_ID` | The demo's Linux/SteamOS depot ID |
+| `STEAM_DEMO_APP_ID` | `5343430` |
+| `STEAM_DEMO_DEPOT_WINDOWS_ID` | `5343431` (after it is reconfigured as the Windows depot in step 1.2) |
+| `STEAM_DEMO_DEPOT_MACOS_ID` | The macOS depot added in step 1.2 (expected `5343432`) |
+| `STEAM_DEMO_DEPOT_LINUX_ID` | The Linux/SteamOS depot added in step 1.2 (expected `5343433`) |
 
-The CI build account (`STEAM_USERNAME`) needs **Developer** permissions on the
-demo App ID as well as on 4963030 — Valve does not inherit app permissions
+The CI build account (`STEAM_USERNAME`) needs **Developer** permissions on
+App 5343430 as well as on 4963030 — Valve does not inherit app permissions
 from the base app to its demo. Add them under **Users & Permissions** or the
 first upload fails at `+login` / `run_app_build` with a permission error.
 
