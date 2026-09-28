@@ -11,6 +11,20 @@ on:
         description: 'Release tag (e.g. v0.1.0-alpha.1)'
         required: true
         type: string
+      edition:
+        description: >
+          "full" builds the paid base app (what a tag push builds). "demo" builds
+          the free Steam Next Fest demo from the same tag (issue #495): the web
+          bundle and the Tauri shell are compiled as the demo edition, artifacts
+          upload as demo-desktop-*, no GitHub release is published, and the
+          Steam step targets the demo app (STEAM_DEMO_APP_ID). See
+          publishing/STEAM_NEXT_FEST_DEMO.md.
+        required: false
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - demo
 
 # Write permission needed to create GitHub releases and upload assets.
 permissions:
@@ -39,6 +53,25 @@ jobs:
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
           VERSION="${TAG%%-*}"
           bash scripts/check-docs-freshness.sh "$VERSION"
+      # A workflow_dispatch builds whatever ref it was started from; the `tag`
+      # input only names the release. The demo (issue #495) must be the same
+      # source as the full build it accompanies, so refuse to build it from
+      # anything but that tag's commit. build-desktop needs this job, so a
+      # mismatch stops the run before a single binary is compiled.
+      - name: Demo builds come from the release tag
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.edition == 'demo' }}
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "refs/tags/$TAG:refs/tags/$TAG"
+          TAG_SHA="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::edition=demo must be run from tag $TAG ($TAG_SHA), but this run is on $GITHUB_SHA." \
+                 "In 'Run workflow', choose the tag under 'Use workflow from' — see publishing/STEAM_NEXT_FEST_DEMO.md §2."
+            exit 1
+          fi
+          echo "OK: building the demo from $TAG ($TAG_SHA)."
 
   # ── Cross-platform desktop builds ─────────────────────────────────────────────
   build-desktop:
@@ -102,6 +135,12 @@ jobs:
       # payload — which made the Steam publish chained to each tag fail on a depot
       # audit every single time.
       BUNDLE_LLAMA_SERVER: true
+      # Product edition (issue #495). Tag pushes always build the full app; only
+      # a workflow_dispatch can ask for the demo. The value reaches three
+      # places: the Vite bundle (VITE_CONVSIM_EDITION), the Tauri shell
+      # (CONVSIM_EDITION, validated by build.rs and passed on to convsim-core at
+      # launch), and the artifact name prefix that steam-deploy.yml selects on.
+      CONVSIM_EDITION: ${{ github.event.inputs.edition || 'full' }}
     strategy:
       fail-fast: false
       matrix:
@@ -536,6 +575,10 @@ jobs:
           # The beforeBuildCommand in tauri.conf.json re-runs `pnpm web build`
           # so this env var reaches Vite automatically.
           VITE_STEAM_DLC_APP_IDS: ${{ vars.STEAM_DLC_APP_IDS }}
+          # Edition (issue #495): VITE_ reaches the web bundle through the same
+          # beforeBuildCommand; the un-prefixed one is read by build.rs /
+          # option_env! in the Tauri shell. Both are the job-level value.
+          VITE_CONVSIM_EDITION: ${{ env.CONVSIM_EDITION }}
           # GCP KMS and PFX credentials for Tauri's bundle.windows.signCommand,
           # which invokes scripts/jsign-sign.ps1 per binary during bundling.
           # When absent the script INFO-skips (unsigned dev/fork build).
@@ -616,8 +659,19 @@ jobs:
             if [ "$RUNNER_OS" = "Windows" ]; then
               STEAM_FEATURES=(--features steam)
             fi
+            # Demo edition (issue #495): a second merge-patch overlay renames the
+            # product ("Conversation Simulator Demo"), gives it its own bundle
+            # identifier, and rewrites the window title. The shell still keys
+            # its data directory to the full app's identifier so a model
+            # downloaded in the demo is reused by the full version. Overlays
+            # are applied in order; later ones win.
+            EDITION_CONFIG=()
+            if [ "$CONVSIM_EDITION" = "demo" ]; then
+              EDITION_CONFIG=(--config "$GITHUB_WORKSPACE/apps/desktop/src-tauri/tauri.demo.conf.json")
+            fi
             pnpm --filter @convsim/desktop exec tauri build \
               --config "$GITHUB_WORKSPACE/apps/desktop/src-tauri/tauri.steam.conf.json" \
+              "${EDITION_CONFIG[@]}" \
               "${STEAM_FEATURES[@]}"
           else
             pnpm --filter @convsim/desktop build
@@ -1509,10 +1563,13 @@ jobs:
       # the packaging step above — Steam depots require application files
       # directly, not the .dmg installer, so the steam-deploy workflow extracts
       # this tarball into steam-content/macos/.
+      # Demo builds upload as demo-desktop-* — a prefix the full app's desktop-*
+      # glob in steam-deploy.yml cannot match — so the two payloads can never be
+      # confused (issue #495).
       - name: Upload desktop installer artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: desktop-${{ matrix.name }}
+          name: ${{ env.CONVSIM_EDITION == 'demo' && 'demo-desktop-' || 'desktop-' }}${{ matrix.name }}
           # Glob patterns cover all known Tauri installer formats plus the
           # Windows Steam depot tarball (produced only for Steam/BUNDLE_LLAMA_SERVER
           # builds).  The steam-deploy workflow downloads all release assets and
@@ -1536,6 +1593,9 @@ jobs:
   release:
     name: Publish release notes
     needs: build-desktop
+    # A demo build (issue #495) is a Steam-only artifact of an existing release
+    # tag: it publishes no release notes, and must not touch the tag's release.
+    if: ${{ (github.event.inputs.edition || 'full') != 'demo' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -1618,12 +1678,20 @@ jobs:
   # short-circuits with an INFO message and this job succeeds, leaving the release
   # green.  See publishing/STEAM_APP_REGISTRATION.md for credential setup.
   steam:
-    name: Publish to Steam (beta)
-    needs: release
-    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    name: Publish to Steam (${{ (github.event.inputs.edition || 'full') == 'demo' && 'demo' || 'beta' }})
+    needs: [build-desktop, release]
+    # Full edition: only after the release notes published. Demo edition: the
+    # release job is skipped by design, so chain straight off the builds.
+    if: >-
+      ${{ !cancelled() && needs.build-desktop.result == 'success' &&
+          (needs.release.result == 'success' ||
+           (needs.release.result == 'skipped' && (github.event.inputs.edition || 'full') == 'demo')) }}
     uses: ./.github/workflows/steam-deploy.yml
     with:
       release_tag: ${{ github.event.inputs.tag || github.ref_name }}
+      # Which Steam app receives the payload — the paid base app, or the free
+      # Next Fest demo app (issue #495). Demo runs upload demo-desktop-* artifacts.
+      edition: ${{ github.event.inputs.edition || 'full' }}
       # Empty: stage the build, do not move a Steam branch. The build lands in
       # Steamworks → Builds and a human sets it live. A git tag must not be able to
       # put a build in front of players by itself, and CI cannot verify that the
@@ -1671,7 +1739,17 @@ jobs:
     name: Upload to Defender [Windows]
     needs: [build-desktop, release]
     runs-on: ubuntu-latest
-    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    # Full edition: after the release job. Demo edition (issue #495): the
+    # release job is skipped by design, so gate on the builds instead — the
+    # demo's Windows depot payload gets the same Defender-for-Storage verdict
+    # (runbook gate D-07), it just has no GitHub release to annotate.
+    if: >-
+      ${{ !cancelled()
+          && needs.build-desktop.result == 'success'
+          && (needs.release.result == 'success'
+              || (needs.release.result == 'skipped' && (github.event.inputs.edition || 'full') == 'demo')) }}
+    env:
+      EDITION: ${{ github.event.inputs.edition || 'full' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -1709,7 +1787,8 @@ jobs:
         if: steps.secrets_check.outputs.skip == 'false'
         uses: actions/download-artifact@v7
         with:
-          name: desktop-Windows-x86_64
+          # Demo builds upload as demo-desktop-* (see build-desktop).
+          name: ${{ env.EDITION == 'demo' && 'demo-desktop-' || 'desktop-' }}Windows-x86_64
           path: windows-artifact
 
       - name: Create signed-build zip
@@ -1722,7 +1801,11 @@ jobs:
         env:
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          BLOB_NAME="${TAG}-signed-build.zip"
+          if [ "$EDITION" = "demo" ]; then
+            BLOB_NAME="${TAG}-demo-signed-build.zip"
+          else
+            BLOB_NAME="${TAG}-signed-build.zip"
+          fi
           echo "BLOB_NAME=$BLOB_NAME" >> "$GITHUB_ENV"
           cd windows-artifact && zip -r "../$BLOB_NAME" . && cd ..
           ls -lh "$BLOB_NAME"
@@ -1796,6 +1879,14 @@ jobs:
           PORTAL_URL="https://portal.azure.com/#@/resource/${RESOURCE_PATH}/overview"
           echo "portal_url=$PORTAL_URL" >> "$GITHUB_OUTPUT"
           echo "  Portal URL: $PORTAL_URL"
+
+          # Demo builds publish no GitHub release, so there is nothing to
+          # annotate: the verdict is read in the portal and recorded on the
+          # demo's review row (publishing/STEAM_NEXT_FEST_DEMO.md §4.4).
+          if [ "$EDITION" = "demo" ]; then
+            echo "  INFO  Demo build: no GitHub release to annotate. Blob: $BLOB_NAME"
+            exit 0
+          fi
 
           # Idempotent release-note append.
           # The HTML marker string is searched in the current release body; if

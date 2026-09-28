@@ -12,6 +12,7 @@ import { getVoiceTimingPrefs } from '../components/VoiceSettingsPanel'
 import type { ApiError } from '../api/errors'
 import type { ApiResult } from '../api/client'
 import { ApiErrorView } from '../components/ApiErrorView'
+import { useIsDemo } from '../edition'
 
 const TURN_TIMEOUT_MS = 60_000
 const SLOW_RESPONSE_MS = 5_000
@@ -74,6 +75,8 @@ function npcStatusLabel(sessionState: string, phase: Phase): string {
 export default function Conversation() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
+  // Demo edition (issue #495): there is no library to go back to.
+  const isDemo = useIsDemo()
   const { state } = useLocation()
   const routeState = state as {
     language?: string
@@ -922,8 +925,9 @@ export default function Conversation() {
               fontSize: '0.8rem',
             }}
           >
-            NPC is taking longer than usual. The model may be slow on this hardware. You can
-            adjust settings or try a smaller model.
+            {isDemo
+              ? 'NPC is taking longer than usual. The model may be slow on this hardware; closing other apps usually helps.'
+              : 'NPC is taking longer than usual. The model may be slow on this hardware. You can adjust settings or try a smaller model.'}
           </div>
         )}
       </div>
@@ -1043,7 +1047,7 @@ export default function Conversation() {
             Generate debrief
           </button>
           <button
-            onClick={() => navigate('/library')}
+            onClick={() => navigate(isDemo ? '/' : '/library')}
             style={{
               padding: '0.5rem 1rem',
               borderRadius: 6,
@@ -1053,13 +1057,13 @@ export default function Conversation() {
               cursor: 'pointer',
             }}
           >
-            Back to library
+            {isDemo ? 'Back to home' : 'Back to library'}
           </button>
         </div>
       ) : phase === 'error' ? (
         <div style={{ textAlign: 'center' }}>
           <button
-            onClick={() => navigate('/library')}
+            onClick={() => navigate(isDemo ? '/' : '/library')}
             style={{
               padding: '0.5rem 1rem',
               borderRadius: 6,
@@ -1069,7 +1073,7 @@ export default function Conversation() {
               cursor: 'pointer',
             }}
           >
-            Back to library
+            {isDemo ? 'Back to home' : 'Back to library'}
           </button>
         </div>
       ) : (

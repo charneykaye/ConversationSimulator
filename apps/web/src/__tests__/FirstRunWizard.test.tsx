@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import FirstRunWizard from '../screens/FirstRunWizard'
@@ -99,10 +99,10 @@ function makeModelsResponse(overrides: Partial<ModelsResponse> = {}): ModelsResp
   }
 }
 
-function renderWizard() {
+function renderWizard(initialEntry = '/first-run') {
   return render(
     <MemoryRouter
-      initialEntries={['/first-run']}
+      initialEntries={[initialEntry]}
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
       <Routes>
@@ -1159,5 +1159,136 @@ describe('FirstRunWizard — load error state', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /back to welcome/i }))
     await screen.findByRole('heading', { name: /practice conversations that matter/i })
+  })
+})
+
+// ── Demo edition (issue #495) ─────────────────────────────────────────────────
+
+describe('FirstRunWizard — demo edition', () => {
+  // In the demo the engine serves exactly one registry model and the wizard
+  // offers exactly one road: Set me up. No Ollama, no GGUF, and a finished
+  // install lands on the demo Home (there is no library).
+  beforeEach(() => {
+    vi.stubEnv('VITE_CONVSIM_EDITION', 'demo')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('offers Set me up and no advanced Ollama / GGUF paths', () => {
+    renderWizard()
+    expect(screen.getByRole('button', { name: /set me up/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /advanced: use ollama or a local gguf file/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /browse ollama models/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /use a gguf file/i })).not.toBeInTheDocument()
+  })
+
+  it('describes the download as the demo model with size and license from the registry', async () => {
+    renderWizard()
+    expect(await screen.findByText(/downloads the demo's ai model \(2\.6 gb, apache-2\.0\)/i)).toBeInTheDocument()
+    expect(screen.getByText(/^demo$/i)).toBeInTheDocument()
+  })
+
+  it('installs the single registry model even when it is not the starter tier', async () => {
+    // CONVSIM_DEMO_MODEL_ID may pin another tier; the engine then returns only
+    // that model, and Set me up must install it rather than fall to "choose".
+    mockApi.getModels.mockResolvedValue({ ok: true, data: makeModelsResponse({
+      registry: [{ ...REGISTRY_ENTRY, id: 'qwen3-8b-instruct-q4_k_m', name: 'Qwen3 8B Instruct Q4_K_M', role: 'standard' }],
+    }) })
+    renderWizard()
+    fireEvent.click(screen.getByRole('button', { name: /set me up/i }))
+    await waitFor(() => expect(mockApi.startSetupInstall).toHaveBeenCalledWith('qwen3-8b-instruct-q4_k_m'))
+    expect(await screen.findByRole('heading', { name: /setting up your ai/i })).toBeInTheDocument()
+  })
+
+  it('lands on the demo Home when the install completes', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      renderWizard()
+      fireEvent.click(screen.getByRole('button', { name: /set me up/i }))
+      await screen.findByRole('heading', { name: /setting up your ai/i })
+      mockApi.getSetupInstallStatus.mockResolvedValue({ ok: true, data: {
+        ...RUNNING_JOB,
+        status: 'complete' as const,
+        stages: RUNNING_JOB.stages.map((s) => ({ ...s, state: 'complete' as const })),
+      } })
+      await vi.advanceTimersByTimeAsync(2000)
+      await waitFor(() => expect(screen.getByTestId('home-page')).toBeInTheDocument())
+      expect(screen.queryByTestId('library-page')).not.toBeInTheDocument()
+      expect(localStorage.getItem(SETUP_KEYS.firstRunComplete)).toBe('true')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recovers from a model-warmup failure with a retry, not a chooser that only offers the same model', async () => {
+    // A low-RAM Next Fest machine: the download completes, the engine cannot
+    // start the model. The demo has no smaller tier, so "choose a smaller
+    // model" would loop straight back to the same download.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      renderWizard()
+      fireEvent.click(screen.getByRole('button', { name: /set me up/i }))
+      await screen.findByRole('heading', { name: /setting up your ai/i })
+      mockApi.getSetupInstallStatus.mockResolvedValue({ ok: true, data: {
+        ...RUNNING_JOB,
+        status: 'failed' as const,
+        stages: RUNNING_JOB.stages.map((s) =>
+          s.id === 'warmup'
+            ? { ...s, state: 'failed' as const, error: 'model warmup failed: insufficient RAM' }
+            : s.id === 'model' || s.id === 'verify'
+              ? { ...s, state: 'complete' as const }
+              : s,
+        ),
+        error_message: 'model warmup failed: insufficient RAM',
+      } })
+      await vi.advanceTimersByTimeAsync(2000)
+      await waitFor(() =>
+        expect(screen.getByRole('alert', { name: /model warmup error/i })).toBeInTheDocument(),
+      )
+      expect(screen.queryByRole('button', { name: /choose a smaller model/i })).not.toBeInTheDocument()
+      expect(screen.queryByText(/try a smaller model/i)).not.toBeInTheDocument()
+      expect(screen.getByText(/close other applications/i)).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /try again/i }))
+      expect(await screen.findByRole('heading', { name: /confirm model install/i })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: /choose how to get started/i })).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('can retry a resumed install that fails, although no model was chosen in this session', async () => {
+    // Relaunch mid-download: FirstRunGuard forwards the job id and the wizard
+    // opens straight on the progress step, so nothing has fetched the
+    // registry. If that job then fails, Retry must still have a model to
+    // confirm rather than rendering an empty page.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      mockApi.getSetupInstallStatus.mockResolvedValue({ ok: true, data: {
+        ...RUNNING_JOB,
+        id: 7,
+        status: 'failed' as const,
+        stages: RUNNING_JOB.stages.map((s) =>
+          s.id === 'model' ? { ...s, state: 'failed' as const, error: 'no network connection available' } : s,
+        ),
+        error_message: 'no network connection available',
+      } })
+      renderWizard('/first-run?resume_install=7')
+      await vi.advanceTimersByTimeAsync(2000)
+      await waitFor(() =>
+        expect(screen.getByRole('alert', { name: /network error/i })).toBeInTheDocument(),
+      )
+      expect(screen.queryByRole('button', { name: /choose a different option/i })).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /^retry$/i }))
+      expect(await screen.findByRole('heading', { name: /confirm model install/i })).toBeInTheDocument()
+      expect(screen.getByText('Qwen3 4B Instruct Q4_K_M')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: /confirm & install/i }))
+      await waitFor(() => expect(mockApi.startSetupInstall).toHaveBeenCalledWith('qwen3-4b-instruct-q4_k_m'))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

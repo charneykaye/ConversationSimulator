@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Conversation Simulator Demo",
+  "identifier": "com.outrightmental.convsim.demo",
+  "plugins": {
+    "updater": null
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Conversation Simulator Demo",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  },
+  "bundle": {
+    "shortDescription": "Conversation Simulator demo — five AI conversations, running entirely on your computer",
+    "longDescription": "The Steam Next Fest demo of Conversation Simulator: download one AI model and play five curated conversations with characters that run 100% on your device. No data leaves your machine."
+  }
+}

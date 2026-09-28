@@ -399,7 +399,7 @@ gate (Stage 3) or the public release gate (Stage 4).
 - [ ] Pack validator rejects any pack setting `allow_external_urls: true`.
 - [ ] Safety policy blocks `nsfw_sexual_content` at the input router level (can be tested with a synthetic input).
 - [ ] Global non-overridable rules (`minors_romantic_or_sexual`, `self_harm_crisis`) cannot be weakened by any pack policy.
-- [ ] All four official packs pass `convsim validate-pack` with no warnings.
+- [ ] All official packs (five player-facing plus the tutorial) pass `convsim validate-pack` with no warnings.
 
 ### SR-06 — Licensing audit
 

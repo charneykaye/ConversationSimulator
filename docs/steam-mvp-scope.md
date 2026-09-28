@@ -97,6 +97,23 @@ approved by Valve for private access.
 | G3-05 | Compliance checklists signed off | Manual | All compliance checklist items `SR-01` through `SR-08` in the compliance register are signed off by their named owners with a date. |
 | G3-06 | Beta session verification | Manual (beta testers) | A minimum of five testers (at least one on each of Windows, macOS, and Linux) complete a full text session and view the debrief screen. No session-ending bugs, data-loss bugs, or privacy regressions remain open at the time the beta gate is declared. |
 
+### Stage 3½ gate — Steam Next Fest demo
+
+Entry criterion: Stage 3 gate passed. The demo edition is the same build
+narrowed to one model download and five curated conversations (issue #495);
+it ships as a separate free Steam app attached to the base app and is entered
+in Steam Next Fest before the public release.
+
+The demo has its own gate, D-01 through D-09, defined in
+[steam-next-fest-demo.md — Demo gate](steam-next-fest-demo.md#demo-gate):
+server- and UI-side edition enforcement (CI), one-download first run, exactly
+five conversations, coherent conversations to the debrief on the reference
+hardware, save data carrying over to the full app, depot audit and signing,
+offline play after install, and no full-app claims in the demo copy. A
+demo blocker is any crash, stalled download, failed first-run setup,
+incoherent NPC turn, or missing debrief. The demo's `default` branch is set
+live only when every row is PASS.
+
 ### Stage 4 gate — Public paid ($9.99) Steam release
 
 Entry criterion: Stage 3 gate fully passed and Valve private beta approval
@@ -156,6 +173,7 @@ All open and closed issues in the Steam release work stream:
 ## Links
 
 - [STEAM_ROADMAP.md](STEAM_ROADMAP.md) — release principles, release train, target platforms, and model download transparency spec
+- [steam-next-fest-demo.md](steam-next-fest-demo.md) — the free demo edition: scope, decisions, cut list, and the demo gate (D-01–D-09)
 - [publishing/STEAM_COMPLIANCE_AND_RISK_REGISTER.md](../publishing/STEAM_COMPLIANCE_AND_RISK_REGISTER.md) — risk register and compliance checklists (SR-01 through SR-09)
 - [ROADMAP.md](../ROADMAP.md) — base project roadmap and MVP acceptance criteria
 - [release-checklist.md](release-checklist.md) — Parts A–D platform smoke matrix

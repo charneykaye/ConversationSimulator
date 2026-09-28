@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -101,6 +101,18 @@ class ServiceConfig(BaseSettings):
     # Even in debug mode callers must use convsim_core.redaction helpers
     # before logging any value derived from conversation content.
     dev_debug: bool = False
+    # Product edition (issue #495). "full" is the complete app. "demo" is the
+    # Steam Next Fest demo: exactly one curated model download and five curated
+    # conversations, with the rest of the product surface hidden. The Tauri
+    # shell of a demo build sets CONVSIM_EDITION=demo for the sidecar; the web
+    # bundle is built with the matching VITE_CONVSIM_EDITION. The allowlist
+    # itself lives in convsim_core/edition.py.
+    edition: Literal["full", "demo"] = "full"
+    # Registry id of the model the demo edition installs. Unset = the registry's
+    # `role: starter` entry (Qwen3 4B today). Set CONVSIM_DEMO_MODEL_ID to point
+    # the demo at a smaller tier once one clears the demo quality bar — no code
+    # change required. Ignored outside the demo edition.
+    demo_model_id: Optional[str] = None
 
     @model_validator(mode="after")
     def _reject_wildcard_bind(self) -> "ServiceConfig":

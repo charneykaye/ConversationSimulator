@@ -93,4 +93,19 @@ describe('PerformanceWarningBanner', () => {
     fireEvent.click(screen.getByRole('button', { name: /open runtime settings/i }))
     expect(mockNavigate).toHaveBeenCalledWith('/settings')
   })
+
+  it('shows the warning without the Runtime Settings button in the demo edition', () => {
+    // The demo hides the runtime section of Settings (issue #495); the button
+    // would land the player on a page with nothing to adjust.
+    vi.stubEnv('VITE_CONVSIM_EDITION', 'demo')
+    try {
+      renderBanner([
+        { code: 'use_smaller_model', title: 'NPC is slow', detail: 'Token took 4s.' },
+      ])
+      expect(screen.getByText(/npc is slow/i)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /open runtime settings/i })).not.toBeInTheDocument()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
 })

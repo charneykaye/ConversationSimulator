@@ -20,6 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from convsim_core.edition import require_demo_model_path
 from convsim_core.errors import ConvsimError
 from convsim_core.runtime.llama_cpp_download import (
     DownloadProgress,
@@ -157,6 +158,12 @@ async def start_sidecar(request: Request, body: SidecarStartRequest) -> SidecarS
     missing executable, or startup failure (with a descriptive message).
     """
     sidecar: LlamaCppSidecar = request.app.state.sidecar
+
+    # Demo edition (issue #495): only the curated model's own install may be
+    # loaded into the managed engine.
+    require_demo_model_path(
+        request.app.state.db.connection(), request.app.state.service_config, body.model_path
+    )
 
     if sidecar.state in (SidecarState.RUNNING, SidecarState.STARTING):
         raise ConvsimError(

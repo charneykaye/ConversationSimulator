@@ -9,6 +9,7 @@ import { useTranslation } from '../../i18n'
 import type { UseSetupFlowReturn } from '../useSetupFlow'
 import type { SetupInstallStage } from '@convsim/shared'
 import { SETUP_DOCS_URL } from '../docsUrls'
+import { useIsDemo } from '../../edition'
 
 // The scripted tutorial scenario is internal test/dev content (issue #473) —
 // never advertise it as an upcoming mission.
@@ -73,6 +74,9 @@ function StageList({ stages }: { stages: SetupInstallStage[] }) {
 
 export function InstallingStep({ flow, mode }: InstallingStepProps) {
   const { t } = useTranslation()
+  // Demo edition (issue #495): there is no "different option" to choose —
+  // the curated model is the only one — so those escape hatches are hidden.
+  const isDemo = useIsDemo()
   // Real scenario previews for the while-you-wait section (wizard mode). The
   // built-in scenarios are served before any pack install completes, so this
   // renders early; on error the section simply stays hidden.
@@ -94,6 +98,18 @@ export function InstallingStep({ flow, mode }: InstallingStepProps) {
 
   const errMsg = flow.actionError ? errorMessage(flow.actionError) : null
 
+  // Retry must also work when no model was ever selected — the wizard can
+  // open straight on this step with a resumed job (FirstRunGuard forwards the
+  // id). Re-drive the job's own model then, and only fall back to the chooser
+  // when even that is unknown.
+  function retryInstall() {
+    flow.resetAction()
+    if (flow.selectedModel) { flow.setStep('confirm-install'); return }
+    const registryId = flow.setupInstallJob?.registry_id
+    if (registryId) { void flow.handleStartInstall(registryId); return }
+    flow.setStep('loading')
+  }
+
   const wrapper = mode === 'wizard'
     ? { style: { maxWidth: '640px', margin: '2rem auto', padding: '0 1rem' } }
     : { style: { maxWidth: '640px' } }
@@ -113,12 +129,13 @@ export function InstallingStep({ flow, mode }: InstallingStepProps) {
             <div role="alert" aria-label="network error" style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px' }}>
               <p style={{ margin: '0 0 0.4rem', color: '#f87171', fontWeight: 600, fontSize: '0.875rem' }}>Network connection lost</p>
               <p style={{ margin: '0 0 0.75rem', fontSize: '0.825rem', color: '#a1a1aa' }}>
-                The download could not complete. Check your internet connection and try again,
-                or choose a different option that does not require a download.
+                {isDemo
+                  ? 'The download could not complete. Check your internet connection and try again.'
+                  : 'The download could not complete. Check your internet connection and try again, or choose a different option that does not require a download.'}
               </p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <PrimaryButton onClick={() => { flow.resetAction(); flow.setStep('confirm-install') }}>Retry</PrimaryButton>
-                <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>
+                <PrimaryButton onClick={retryInstall}>Retry</PrimaryButton>
+                {!isDemo && <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>}
                 <CopyDiagnosticsButton error={flow.actionError} context="setup-install:network" />
               </div>
             </div>
@@ -129,11 +146,13 @@ export function InstallingStep({ flow, mode }: InstallingStepProps) {
               <p style={{ margin: '0 0 0.4rem', color: '#f87171', fontWeight: 600, fontSize: '0.875rem' }}>Not enough disk space</p>
               <p style={{ margin: '0 0 0.75rem', fontSize: '0.825rem', color: '#a1a1aa' }}>
                 {flow.selectedModel != null ? `This model requires approximately ${flow.selectedModel.size_gb} GB of free disk space. ` : ''}
-                Free up space on your drive and try again, or use a smaller model or Ollama instead.
+                {isDemo
+                  ? 'Free up space on your drive and try again.'
+                  : 'Free up space on your drive and try again, or use a smaller model or Ollama instead.'}
               </p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <PrimaryButton onClick={() => { flow.resetAction(); flow.setStep('confirm-install') }}>Try again</PrimaryButton>
-                <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>
+                <PrimaryButton onClick={retryInstall}>Try again</PrimaryButton>
+                {!isDemo && <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>}
                 <CopyDiagnosticsButton error={flow.actionError} context="setup-install:disk" />
               </div>
             </div>
@@ -143,13 +162,29 @@ export function InstallingStep({ flow, mode }: InstallingStepProps) {
             <div role="alert" aria-label="model warmup error" style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px' }}>
               <p style={{ margin: '0 0 0.4rem', color: '#f87171', fontWeight: 600, fontSize: '0.875rem' }}>Model loaded but could not start</p>
               <p style={{ margin: '0 0 0.75rem', fontSize: '0.825rem', color: '#a1a1aa' }}>
-                The model was downloaded successfully but the AI engine could not start it.
-                This usually means your machine doesn't have enough RAM to run this model.
-                Try a smaller model, or check the{' '}
-                <a href={SETUP_DOCS_URL} target="_blank" rel="noreferrer">setup docs</a>.
+                {isDemo ? (
+                  // The demo has exactly one model, so "choose a smaller one" would
+                  // loop back to the same download (issue #495): offer a retry
+                  // and the two things that actually help on a low-RAM machine.
+                  <>
+                    The model was downloaded successfully but the AI engine could not start it.
+                    This usually means your machine is short on memory: close other applications
+                    and try again, or check the{' '}
+                    <a href={SETUP_DOCS_URL} target="_blank" rel="noreferrer">setup docs</a>.
+                  </>
+                ) : (
+                  <>
+                    The model was downloaded successfully but the AI engine could not start it.
+                    This usually means your machine doesn't have enough RAM to run this model.
+                    Try a smaller model, or check the{' '}
+                    <a href={SETUP_DOCS_URL} target="_blank" rel="noreferrer">setup docs</a>.
+                  </>
+                )}
               </p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <PrimaryButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a smaller model</PrimaryButton>
+                {isDemo
+                  ? <PrimaryButton onClick={retryInstall}>Try again</PrimaryButton>
+                  : <PrimaryButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a smaller model</PrimaryButton>}
                 <CopyDiagnosticsButton error={flow.actionError} context="setup-install:warmup" />
               </div>
             </div>
@@ -162,8 +197,8 @@ export function InstallingStep({ flow, mode }: InstallingStepProps) {
                 Check the <a href={SETUP_DOCS_URL} target="_blank" rel="noreferrer">setup docs</a> if the problem persists.
               </p>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <PrimaryButton onClick={() => { flow.resetAction(); flow.setStep('confirm-install') }}>Try again</PrimaryButton>
-                <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>
+                <PrimaryButton onClick={retryInstall}>Try again</PrimaryButton>
+                {!isDemo && <ActionButton onClick={() => { flow.resetAction(); flow.setStep('choose') }}>Choose a different option</ActionButton>}
                 <CopyDiagnosticsButton error={flow.actionError} context="setup-install" />
               </div>
             </div>

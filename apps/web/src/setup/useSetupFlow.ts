@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { SETUP_KEYS } from '../privacyPrefs'
 import { useSetupInstall } from './useSetupInstall'
+import { useIsDemo } from '../edition'
 import type {
   ModelsResponse,
   ModelRegistryEntry,
@@ -94,11 +95,32 @@ async function markFirstRunComplete(): Promise<void> {
   try { await api.recordOnboardingOutcome('completed-with-model') } catch { /* best-effort */ }
 }
 
+/**
+ * The model "Set me up" installs. The registry's starter tier in the full app;
+ * in the demo the engine already narrowed the registry to its one curated
+ * model, which is whatever it is (issue #495).
+ */
+export function pickRecommendedModel(models: ModelsResponse, isDemo: boolean): ModelRegistryEntry | null {
+  const starter = models.registry.find((m) => m.role === 'starter') ?? null
+  if (starter) return starter
+  return isDemo ? (models.registry[0] ?? null) : null
+}
+
 export function useSetupFlow(
   initialStep: SetupFlowStep,
   initialInstallId?: number,
 ): UseSetupFlowReturn {
   const navigate = useNavigate()
+  // Demo edition (issue #495): the engine serves exactly one registry model
+  // (not necessarily role=starter when CONVSIM_DEMO_MODEL_ID pins another
+  // tier), and a finished install lands on the demo Home — there is no library.
+  const isDemo = useIsDemo()
+  // Read through a ref inside the async effects below: the edition can still
+  // flip while 'loading' is in flight (a bundle without a build flag adopting
+  // the engine's answer), and re-running that effect would race two
+  // model/preflight pipelines against one `intentRef`.
+  const isDemoRef = useRef(isDemo)
+  isDemoRef.current = isDemo
   const [step, setStep] = useState<SetupFlowStep>(initialStep)
   const [modelsData, setModelsData] = useState<ModelsResponse | null>(null)
   const [loadError, setLoadError] = useState<ApiError | null>(null)
@@ -178,7 +200,7 @@ export function useSetupFlow(
       intentRef.current = null
 
       if (intent === 'set-me-up') {
-        const rec = modelsResult.data.registry.find((m) => m.role === 'starter') ?? null
+        const rec = pickRecommendedModel(modelsResult.data, isDemoRef.current)
         if (!rec) { setStep('choose'); return }
         setSelectedModel(rec)
         setActionLoading(true)
@@ -218,6 +240,29 @@ export function useSetupFlow(
     })
   }, [step])
 
+  // Resume path: the wizard can open straight on 'installing' with a job id
+  // forwarded by FirstRunGuard, in which case nothing above has fetched the
+  // registry and no model is selected. Fetch it once and seed the selection
+  // from the job's registry_id, so a failure on the resumed job still has a
+  // model to Retry (otherwise Retry → confirm-install rendered an empty page;
+  // in the demo that was the only exit, issue #495).
+  useEffect(() => {
+    if (step !== 'installing' || modelsData != null) return
+    let cancelled = false
+    void api.getModels().then((r) => {
+      if (!cancelled && r.ok) setModelsData(r.data)
+    })
+    return () => { cancelled = true }
+  }, [step, modelsData])
+
+  useEffect(() => {
+    if (step !== 'installing' || selectedModel != null || modelsData == null) return
+    const wanted = setupInstallJob?.registry_id ?? null
+    const fromJob = wanted ? modelsData.registry.find((m) => m.id === wanted) ?? null : null
+    const model = fromJob ?? pickRecommendedModel(modelsData, isDemoRef.current)
+    if (model) setSelectedModel(model)
+  }, [step, selectedModel, modelsData, setupInstallJob])
+
   // React to pipeline job terminal states while on the 'installing' step.
   useEffect(() => {
     if (step !== 'installing' || setupInstallJob == null) return
@@ -225,8 +270,9 @@ export function useSetupFlow(
     if (status === 'complete') {
       // The real model is live. Land the player in the library — one click from
       // their first real conversation (issue #473: no tutorial gate in between).
+      // The demo's five conversations live on Home instead.
       void markFirstRunComplete().then(() => {
-        navigate('/library')
+        navigate(isDemo ? '/' : '/library')
       })
     } else if (status === 'failed' || status === 'cancelled') {
       setActionError({
@@ -234,7 +280,7 @@ export function useSetupFlow(
         message: setupInstallJob.error_message ?? 'Install failed. Please try again.',
       })
     }
-  }, [step, setupInstallJob, navigate])
+  }, [step, setupInstallJob, navigate, isDemo])
 
   // Auto-run benchmark once on entering the 'benchmark' step
   useEffect(() => {
@@ -249,7 +295,7 @@ export function useSetupFlow(
     }).finally(() => { setBenchmarkRunning(false) })
   }, [step])
 
-  const recommendedModel = modelsData?.registry.find((m) => m.role === 'starter') ?? null
+  const recommendedModel = modelsData ? pickRecommendedModel(modelsData, isDemo) : null
 
   function resetAction() {
     setActionError(null)

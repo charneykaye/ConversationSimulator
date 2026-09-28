@@ -42,6 +42,64 @@ export const de: LocaleMessages = {
     workbench: 'Werkbank',
     settings: 'Einstellungen',
     support: 'Support',
+    demoBadge: 'Demo',
+  },
+  // Demo-Edition (Steam Next Fest Demo, Issue #495).
+  demo: {
+    home: {
+      title: 'Gesprächssimulator — Demo',
+      tagline: 'Fünf echte Gespräche. Ein KI-Modell, das vollständig auf Ihrem Computer läuft.',
+      noModel: {
+        heading: 'Ein Download, und es geht los',
+        description:
+          'Die Demo braucht ihr KI-Modell auf Ihrem Computer. Es wird einmal heruntergeladen, danach läuft alles offline.',
+        action: 'Demo-Modell installieren →',
+      },
+    },
+    conversations: {
+      heading: 'Ihre fünf Gespräche',
+      subheading:
+        'Jedes ist eine echte Figur mit eigener Agenda. Spielen Sie sie in beliebiger Reihenfolge, so oft Sie möchten.',
+      loading: 'Gespräche werden geladen…',
+      error: 'Die Gespräche konnten nicht geladen werden. Starten Sie die App neu und versuchen Sie es erneut.',
+      empty: 'Noch keine Gespräche verfügbar. Schließen Sie die Einrichtung ab, um sie freizuschalten.',
+      ordinal: 'Gespräch {{n}}',
+      role: 'Ihre Rolle: {{role}}',
+      language: 'auf {{language}}',
+      start: 'Starten',
+      startLabel: '{{title}} starten',
+    },
+    upsell: {
+      eyebrow: 'Dies ist die Demo',
+      heading: 'Holen Sie sich das vollständige Spiel',
+      body:
+        'Sie spielen fünf der Gespräche. Die Vollversion des Gesprächssimulators enthält alle weiteren — und alles, was Sie hier üben, wird übernommen.',
+      bullets: {
+        library: 'Die komplette Szenario-Bibliothek — 20 Gespräche in fünf Paketen, plus Premium-Szenariopakete',
+        workbench: 'Die Creator-Werkbank: eigene Szenarien, Figuren und Bewertungsraster schreiben und teilen',
+        models: 'Modellstufen, Ollama und eigene GGUF-Dateien für hochwertigere Figuren',
+        voice: 'Sprache: sprechen Sie Ihren Part und hören Sie die Antwort — alles auf Ihrem Rechner verarbeitet',
+      },
+      cta: 'Vollversion auf Steam ansehen',
+      carryOver:
+        'Ihr heruntergeladenes Modell, Ihre Sitzungen und Ihr Logbuch bleiben auf diesem Computer und werden von der Vollversion übernommen.',
+    },
+    debrief: {
+      backHome: '← Zurück zu den Gesprächen',
+    },
+    setup: {
+      setMeUpDescription:
+        'Lädt das KI-Modell der Demo herunter ({{size}} GB, {{license}}). Funktioniert danach offline.',
+      badge: 'Demo',
+    },
+    settings: {
+      clearData: {
+        description:
+          'Löscht dauerhaft alle Sitzungen, Transkripte und zwischengespeicherten Daten von Ihrem Gerät. Dieser Ordner wird mit der Vollversion des Gesprächssimulators auf diesem Computer geteilt; deren Sitzungen und Transkripte werden ebenfalls gelöscht. Installierte Modelle bleiben erhalten.',
+        confirmMessage:
+          'Alle Sitzungen und Transkripte auf diesem Gerät werden dauerhaft gelöscht — auch die der Vollversion des Gesprächssimulators, falls installiert. Dies kann nicht rückgängig gemacht werden.',
+      },
+    },
   },
   home: {
     title: 'Gesprächssimulator',

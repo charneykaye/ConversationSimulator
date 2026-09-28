@@ -12,6 +12,45 @@ use tauri_plugin_shell::ShellExt;
 
 mod steam;
 
+// ── Edition and data root ─────────────────────────────────────────────────────
+
+/// Bundle identifier of the full app. The per-user data root is derived from
+/// this constant for EVERY edition so the demo and the full app share one
+/// data directory (see `shared_data_root`). Baked in by `build.rs` from the
+/// `identifier` in `tauri.conf.json` — the base config, which the demo's
+/// merge-patch overlay never touches — so it cannot drift from the directory
+/// the full app has always used.
+const DATA_ROOT_IDENTIFIER: &str = env!("CONVSIM_DATA_ROOT_IDENTIFIER");
+
+/// Product edition compiled into this binary: `Some("demo")` for the Steam
+/// Next Fest demo, `None` for the full app. Read from the CONVSIM_EDITION
+/// build-time environment variable, which `build.rs` validates.
+fn build_edition() -> Option<&'static str> {
+    match option_env!("CONVSIM_EDITION") {
+        Some("demo") => Some("demo"),
+        _ => None,
+    }
+}
+
+/// The per-user data root every edition shares: `<local data>/<DATA_ROOT_IDENTIFIER>`.
+///
+/// Handed to convsim-core as `CONVSIM_DATA_ROOT` and used for the log directory
+/// the recovery card shows, so the two can never disagree. (The demo bundle's
+/// own `app_local_data_dir()` would be keyed to the demo identifier — an empty
+/// folder nothing writes to.)
+///
+/// The *local* data dir, not `app_data_dir()`: on Windows the latter is
+/// %APPDATA% (the Roaming profile), which some sync tools and enterprise
+/// policies replicate across machines — a poor home for GBs of model files and
+/// private conversation data. `local_data_dir()` is %LOCALAPPDATA%, matching
+/// paths.py's Windows convention. On macOS and Linux the two are identical.
+fn shared_data_root(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .local_data_dir()
+        .ok()
+        .map(|p| p.join(DATA_ROOT_IDENTIFIER))
+}
+
 // ── Status events emitted to the front-end ────────────────────────────────────
 
 #[derive(Clone, serde::Serialize)]
@@ -213,6 +252,19 @@ fn steam_activate_overlay(state: tauri::State<'_, SteamRuntimeState>) -> bool {
         .unwrap_or(false)
 }
 
+/// Open the Steam overlay on the store page of `app_id` — the demo edition's
+/// upsell to the full game (issue #495). Returns `false` outside Steam, with
+/// the overlay disabled, or without the `steam` feature; the front-end then
+/// opens the web store page in the browser instead.
+#[tauri::command]
+fn steam_open_store_page(app_id: u32, state: tauri::State<'_, SteamRuntimeState>) -> bool {
+    state
+        .0
+        .lock()
+        .map(|r| r.open_store_page(app_id))
+        .unwrap_or(false)
+}
+
 /// Diagnostic readout for the overlay gate (G3-03): whether the Steam client
 /// has the overlay enabled, whether the in-process compositing surface is
 /// presenting, and why not if it gave up. All-off outside Steam.
@@ -375,6 +427,66 @@ fn is_port_open(port: u16) -> bool {
     std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
 }
 
+/// The edition an engine already listening on `port` reports from
+/// `GET /api/health`: `Some("demo")`, `Some("full")` (also for an older engine
+/// without the field), or `None` when no readable answer came back. A raw
+/// HTTP/1.1 exchange over the socket we already probe — the shell carries no
+/// HTTP client of its own.
+fn probe_engine_edition(port: u16) -> Option<String> {
+    use std::io::{Read, Write};
+    let addr: SocketAddr = ([127u8, 0, 0, 1], port).into();
+    let mut stream = std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(500)).ok()?;
+    stream.set_read_timeout(Some(Duration::from_secs(3))).ok()?;
+    stream.set_write_timeout(Some(Duration::from_secs(3))).ok()?;
+    stream
+        .write_all(
+            b"GET /api/health HTTP/1.1\r\nHost: 127.0.0.1\r\nAccept: application/json\r\nConnection: close\r\n\r\n",
+        )
+        .ok()?;
+    let mut raw = Vec::new();
+    stream.read_to_end(&mut raw).ok()?;
+    let text = String::from_utf8_lossy(&raw);
+    let (_, body) = text.split_once("\r\n\r\n")?;
+    // Tolerate a chunked body: the JSON object is the outermost {...}.
+    let start = body.find('{')?;
+    let end = body.rfind('}')?;
+    let json: serde_json::Value = serde_json::from_str(&body[start..=end]).ok()?;
+    Some(
+        json.get("edition")
+            .and_then(|v| v.as_str())
+            .unwrap_or("full")
+            .to_string(),
+    )
+}
+
+/// Refuse to attach to the *other* edition's engine (issue #495). The demo
+/// and the full app share port 7355 and one data directory, and Steam lets
+/// both run at once: the full app attaching to the demo's engine would get a
+/// five-conversation library and `EDITION_RESTRICTED` on the Workbench, and
+/// the demo attaching to the full engine would show everything the demo
+/// hides. Returns the message and hint to report, or `None` when the running
+/// engine matches this build (or its edition could not be read — the engine
+/// may be mid-startup, and a matching edition is by far the common case).
+fn foreign_edition_error(port: u16) -> Option<(String, String)> {
+    let mine = build_edition().unwrap_or("full");
+    let theirs = probe_engine_edition(port)?;
+    if theirs == mine {
+        return None;
+    }
+    let (running, this) = if theirs == "demo" {
+        ("Conversation Simulator Demo", "the full version")
+    } else {
+        ("Conversation Simulator", "the demo")
+    };
+    Some((
+        "Another edition of Conversation Simulator is already running.".to_string(),
+        format!(
+            "{running} is using the conversation engine on port {port}. \
+             Close it, then start {this} again."
+        ),
+    ))
+}
+
 // ── Executable resolution (mirrors the Python three-step order) ───────────────
 //
 // 1. CONVSIM_CORE_EXECUTABLE env-var override
@@ -473,9 +585,11 @@ fn launch_or_verify_core(
         // logs folder" button pointing at a non-existent path and dead-ending the
         // very stranded user the card exists to help. Making the directory here
         // guarantees the path shown always exists and is openable.
-        let log_dir: Option<String> = app.path()
-            .app_local_data_dir()
-            .ok()
+        //
+        // Under the SHARED data root (not the bundle's own app_local_data_dir):
+        // convsim-core logs to <CONVSIM_DATA_ROOT>/logs, and for the demo
+        // build those two directories differ (issue #495).
+        let log_dir: Option<String> = shared_data_root(&app)
             .map(|p| p.join("logs"))
             .map(|p| {
                 let _ = std::fs::create_dir_all(&p);
@@ -485,7 +599,19 @@ fn launch_or_verify_core(
 
         // If core is already responding (e.g. started by dev-desktop.sh), signal
         // ready immediately.
+        //
+        // In release builds, only if it is OUR edition's engine: the demo and
+        // the full app share the port (issue #495). Dev builds skip the check
+        // on purpose — `CONVSIM_EDITION=demo ./scripts/dev.sh` runs a demo
+        // engine under a shell compiled without the flag, and the web UI adopts
+        // the engine's edition from /api/health.
         if is_port_open(CORE_PORT) {
+            if !cfg!(debug_assertions) {
+                if let Some((message, hint)) = foreign_edition_error(CORE_PORT) {
+                    emit_core_status(&app, &status_arc, "error", &message, Some(&hint), log_dir_ref);
+                    return;
+                }
+            }
             emit_core_status(&app, &status_arc, "ready", "Core service is ready.", None, log_dir_ref);
             return;
         }
@@ -554,14 +680,24 @@ fn launch_or_verify_core(
         // reads this env var and falls back to OS conventions when it is absent
         // (e.g. in dev mode without Tauri).
         //
-        // Use the *local* app data dir, not app_data_dir(): on Windows the
-        // latter resolves to %APPDATA% (the Roaming profile), which some sync
-        // tools and enterprise policies replicate across machines — a poor home
-        // for GBs of model files and private conversation data. app_local_data_dir()
-        // resolves to %LOCALAPPDATA%, matching paths.py's Windows convention.
-        // On macOS and Linux the two are identical.
-        if let Ok(data_dir) = app.path().app_local_data_dir() {
-            cmd.env("CONVSIM_DATA_ROOT", &data_dir);
+        // The directory is keyed by DATA_ROOT_IDENTIFIER, not the bundle's own
+        // identifier: the Steam Next Fest demo (issue #495) is a separate Steam
+        // app with its own bundle identifier, and it must share this directory
+        // with the full app so the model a player downloaded in the demo (and
+        // their sessions and logbook) are picked up by the full version instead
+        // of being downloaded again. For the full app the two are the same path.
+        // See `shared_data_root` for why it is the *local* data dir.
+        if let Some(root) = shared_data_root(&app) {
+            cmd.env("CONVSIM_DATA_ROOT", root);
+        }
+
+        // Product edition (issue #495). A demo build is compiled with
+        // CONVSIM_EDITION=demo in its environment (see build.rs); it hands the
+        // same value to convsim-core so the engine narrows itself to the demo's
+        // one model and five conversations. Unset = the full app, and nothing
+        // is passed so the engine's own default applies.
+        if let Some(edition) = build_edition() {
+            cmd.env("CONVSIM_EDITION", edition);
         }
 
         // Tell convsim-core where the bundled sidecar binaries live so it can
@@ -787,6 +923,7 @@ pub fn run() {
             steam_show_floating_keyboard,
             steam_hide_floating_keyboard,
             steam_activate_overlay,
+            steam_open_store_page,
             steam_overlay_status,
             steam_trigger_screenshot,
             steam_is_dlc_installed,

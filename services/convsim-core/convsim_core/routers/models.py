@@ -15,6 +15,13 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
+from convsim_core.edition import (
+    EDITION_RESTRICTED,
+    demo_model_allowed,
+    is_demo,
+    require_demo_model_path,
+    resolve_demo_model_id,
+)
 from convsim_core.errors import ConvsimError
 from convsim_core.runtime import build_runtime, list_runtime_ids
 from convsim_core.runtime.ollama_adapter import OllamaChatRuntime
@@ -206,6 +213,24 @@ async def _detect_ollama_models() -> list[DetectedOllamaModel]:
         await client.aclose()
 
 
+def _require_demo_model(request: Request, registry_id: str) -> None:
+    """In the demo edition only the curated demo model may be installed (issue #495)."""
+    config = request.app.state.service_config
+    if not is_demo(config):
+        return
+    if not demo_model_allowed(request.app.state.db.connection(), config, registry_id):
+        raise ConvsimError(
+            code=EDITION_RESTRICTED,
+            message=(
+                f"Model '{registry_id}' is not available in the demo edition. "
+                "The demo installs one curated model; the full version of "
+                "Conversation Simulator adds the standard and high-quality tiers, "
+                "Ollama, and your own GGUF files."
+            ),
+            status_code=403,
+        )
+
+
 def _get_registry_row(conn: Any, registry_id: str) -> dict[str, Any] | None:
     row = conn.execute(
         "SELECT id, name, license_spdx, sha256, source_type, download_url FROM model_registry WHERE id = ?",
@@ -262,13 +287,21 @@ async def list_models(request: Request) -> ModelsResponse:
     conn = db.connection()
 
     registry_rows: list[dict[str, Any]] = list_registry_models(conn)
+    config = request.app.state.service_config
+    demo = is_demo(config)
+    if demo:
+        # The demo edition offers exactly one model — no tiers to choose from
+        # (issue #495). Everything else the registry knows stays hidden.
+        demo_model_id = resolve_demo_model_id(conn, config)
+        registry_rows = [row for row in registry_rows if row["id"] == demo_model_id]
     registry_entries = [ModelRegistryEntry(**row) for row in registry_rows]
 
     installed_rows = get_installed_models(conn)
     installed = [InstalledModelInfo(**row) for row in installed_rows]
 
     active_cfg = get_active_config(conn)
-    ollama_models = await _detect_ollama_models()
+    # Ollama is an advanced path the demo never surfaces; skip the probe too.
+    ollama_models = [] if demo else await _detect_ollama_models()
     runtime_health = await runtime.health()
 
     bm_row = get_most_recent_benchmark(conn)
@@ -307,6 +340,23 @@ async def use_model(request: Request, body: UseModelRequest) -> UseModelResponse
             message=f"Unknown runtime '{body.runtime_id}'. Available: {known}",
             status_code=400,
         )
+
+    # Demo edition (issue #495): the managed local engine on the curated model
+    # is the only runtime selection; Ollama and foreign model paths are
+    # full-app features.
+    if is_demo(request.app.state.service_config):
+        if body.runtime_id != "llama_cpp":
+            raise ConvsimError(
+                code=EDITION_RESTRICTED,
+                message=(
+                    f"Runtime '{body.runtime_id}' is not available in the demo edition. "
+                    "The full version of Conversation Simulator adds Ollama and "
+                    "your own GGUF files."
+                ),
+                status_code=403,
+            )
+        if body.model_id:
+            require_demo_model_path(db.connection(), request.app.state.service_config, body.model_id)
 
     test_runtime = None
     _ollama_model_error: ConvsimError | None = None
@@ -438,6 +488,7 @@ async def install_model(request: Request, body: InstallModelRequest) -> InstallM
             message=f"Model '{body.registry_id}' not found in the local registry.",
             status_code=404,
         )
+    _require_demo_model(request, body.registry_id)
 
     if model["source_type"] == "user-supplied":
         raise ConvsimError(
@@ -569,6 +620,18 @@ async def register_gguf(request: Request, body: RegisterGgufRequest) -> Register
     only the path is stored. The user is responsible for the model's license
     and hardware requirements; the app makes no claims about redistribution.
     """
+    if is_demo(request.app.state.service_config):
+        # Demo edition (issue #495): bringing your own GGUF is a full-app feature.
+        raise ConvsimError(
+            code=EDITION_RESTRICTED,
+            message=(
+                "Using your own GGUF file is not available in the demo edition. "
+                "The demo installs one curated model; the full version of "
+                "Conversation Simulator adds Ollama and your own GGUF files."
+            ),
+            status_code=403,
+        )
+
     path = body.path.strip()
 
     if not path:

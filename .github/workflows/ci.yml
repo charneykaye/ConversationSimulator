@@ -238,11 +238,21 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-      - name: Cache and install Linux system dependencies
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-          version: 1.0
+      # Plain apt, the same way release.yml installs these. The cache-apt-pkgs
+      # action used here before installed against a stale package index (no
+      # `apt-get update` first), so a mirror rotation turned every fetch into a
+      # 404 — and the action swallowed that failure with a green step, then
+      # saved the empty result under its cache key, so every later run restored
+      # "nothing" and cargo failed on a missing glib-2.0 with no apt error in
+      # sight. `apt-get update` first, and a failing install fails the step.
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
       - name: Install Rust stable toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Cache Rust build artifacts

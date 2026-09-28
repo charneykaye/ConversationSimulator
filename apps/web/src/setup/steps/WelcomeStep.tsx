@@ -4,6 +4,7 @@ import { useTranslation } from '../../i18n'
 import { ActionButton } from '../primitives'
 import type { UseSetupFlowReturn } from '../useSetupFlow'
 import { SETUP_DOCS_URL } from '../docsUrls'
+import { useIsDemo } from '../../edition'
 
 const cardBase: React.CSSProperties = {
   display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
@@ -15,6 +16,8 @@ const cardBase: React.CSSProperties = {
 export function WelcomeStep({ flow }: { flow: UseSetupFlowReturn }) {
   const { t } = useTranslation()
   const rec = flow.recommendedModel
+  // Demo edition (issue #495): one download, no Ollama / GGUF alternatives.
+  const isDemo = useIsDemo()
   const [privacyOpen, setPrivacyOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
@@ -63,14 +66,14 @@ export function WelcomeStep({ flow }: { flow: UseSetupFlowReturn }) {
           </strong>
           <span style={{ display: 'block', fontSize: '0.875rem', color: '#c7d2fe', marginBottom: '0.75rem', lineHeight: 1.5 }}>
             {rec != null
-              ? t('setup.welcome.setMeUp.description', { size: rec.size_gb ?? 0, license: rec.license_spdx ?? '' })
+              ? t(isDemo ? 'demo.setup.setMeUpDescription' : 'setup.welcome.setMeUp.description', { size: rec.size_gb ?? 0, license: rec.license_spdx ?? '' })
               : t('setup.welcome.setMeUp.descriptionLoading')}
           </span>
           <span style={{
             fontSize: '0.75rem', fontWeight: 600, color: '#6ee7b7',
             border: '1px solid rgba(110,231,183,0.5)', borderRadius: '4px', padding: '0.15rem 0.4rem',
           }}>
-            {t('setup.welcome.setMeUp.badge')}
+            {isDemo ? t('demo.setup.badge') : t('setup.welcome.setMeUp.badge')}
           </span>
         </button>
       </div>
@@ -107,7 +110,8 @@ export function WelcomeStep({ flow }: { flow: UseSetupFlowReturn }) {
         )}
       </div>
 
-      {/* Advanced paths disclosure */}
+      {/* Advanced paths disclosure — not offered in the demo (issue #495) */}
+      {!isDemo && (
       <div style={{ marginBottom: '1.25rem' }}>
         <button
           onClick={() => setAdvancedOpen((v) => !v)}
@@ -144,6 +148,7 @@ export function WelcomeStep({ flow }: { flow: UseSetupFlowReturn }) {
           </div>
         )}
       </div>
+      )}
 
       <a
         href={SETUP_DOCS_URL}

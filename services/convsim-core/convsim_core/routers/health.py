@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from convsim_core import __version__
+from convsim_core.edition import edition_info
 from convsim_core.runtime.types import RuntimeHealth, RuntimeStatus
 from convsim_core.services.model_manager_service import get_active_config, get_most_recent_benchmark
 from convsim_core.stt.types import SttHealth
@@ -144,9 +145,24 @@ class _RuntimeReadiness(BaseModel):
     last_error: Optional[str] = None
 
 
+class _DemoInfo(BaseModel):
+    """What the demo edition exposes (issue #495). Absent in the full app."""
+
+    # Registry id of the single model the demo installs.
+    model_id: Optional[str] = None
+    # The five curated conversations, in display order.
+    scenario_ids: list[str]
+    # The packs those conversations come from.
+    pack_ids: list[str]
+
+
 class HealthResponse(BaseModel):
     status: str
     version: str
+    # Product edition: "full" or "demo". The web UI trims its surface on
+    # "demo"; the API enforces the same limits server-side regardless.
+    edition: str = "full"
+    demo: Optional[_DemoInfo] = None
     pid: int
     config_path: str
     database: _DatabaseStatus
@@ -294,10 +310,13 @@ async def health(request: Request) -> HealthResponse:
     runtime_health = await request.app.state.runtime.health()
     stt_health = await request.app.state.stt_worker.health()
     tts_health = await request.app.state.tts_worker.health()
+    edition = edition_info(conn, config)
 
     return HealthResponse(
         status="ok",
         version=__version__,
+        edition=edition["edition"],
+        demo=_DemoInfo(**edition["demo"]) if edition["demo"] else None,
         pid=os.getpid(),
         config_path=config.config_path,
         database=_DatabaseStatus(

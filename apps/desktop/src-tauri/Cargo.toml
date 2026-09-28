@@ -13,6 +13,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# build.rs reads tauri.conf.json to bake the full app's bundle identifier in
+# as the shared data-root key (issue #495) — see DATA_ROOT_IDENTIFIER in lib.rs.
+serde_json = "1"
 
 [features]
 # Enable real Steamworks SDK integration.

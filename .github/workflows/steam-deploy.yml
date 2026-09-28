@@ -12,6 +12,18 @@
 #   STEAM_DEPOT_MACOS_ID      macOS depot ID
 #   STEAM_DEPOT_LINUX_ID      Linux / SteamOS depot ID
 #
+# Demo edition (edition = "demo", the free Steam Next Fest demo — issue #495).
+# A Steam demo is a SEPARATE app with its own App ID and depots, created from
+# the base app's Steamworks page. Its identifiers live in their own variables so
+# a demo upload can never land in the paid app's depots:
+#   STEAM_DEMO_APP_ID             Demo App ID
+#   STEAM_DEMO_DEPOT_WINDOWS_ID   Demo Windows depot ID
+#   STEAM_DEMO_DEPOT_MACOS_ID     Demo macOS depot ID
+#   STEAM_DEMO_DEPOT_LINUX_ID     Demo Linux / SteamOS depot ID
+# The demo's depot payload comes from the demo-desktop-* artifacts of a
+# release.yml run started with edition = demo. See
+# publishing/STEAM_NEXT_FEST_DEMO.md for registration and the submission runbook.
+#
 # Repository secrets (Settings → Secrets and variables → Actions → Secrets):
 #   STEAM_USERNAME            Steam username of the dedicated CI build account
 #   STEAM_CONFIG_VDF          Base64-encoded config.vdf from an authenticated Steam
@@ -107,6 +119,18 @@ on:
           download from the release itself.
         required: true
         type: string
+      edition:
+        description: >
+          Which Steam app to upload to. "full" is the paid base app
+          (STEAM_APP_ID). "demo" is the free Next Fest demo app
+          (STEAM_DEMO_APP_ID) and takes its payload from the demo-desktop-*
+          artifacts of a release run started with edition = demo.
+        required: false
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - demo
 
   # Reusable workflow target: called from release.yml after a successful
   # GitHub release.  The steam-release environment gate (below) still applies
@@ -141,6 +165,11 @@ on:
         required: false
         default: ''
         type: string
+      edition:
+        description: '"full" (paid base app) or "demo" (free Next Fest demo app).'
+        required: false
+        default: 'full'
+        type: string
 
 permissions:
   contents: read
@@ -149,7 +178,7 @@ permissions:
 
 jobs:
   steam-upload:
-    name: Upload to Steam (${{ inputs.release_tag }})
+    name: Upload to Steam (${{ inputs.release_tag }}, ${{ inputs.edition || 'full' }})
     runs-on: ubuntu-latest
 
     # The steam-release environment gates this job behind a manual approval step.
@@ -198,6 +227,65 @@ jobs:
             exit 1
           fi
 
+      # ── Resolve edition ────────────────────────────────────────────────────
+      # Picks the Steam app (and its depots) the payload goes to, and which
+      # build artifacts carry it. The demo edition (issue #495) is a separate
+      # free app registered from the base app's Steamworks page; refusing to
+      # continue when its variables are unset keeps a demo upload from ever
+      # falling through to the paid app's App ID.
+      - name: Resolve edition
+        if: env.HAS_STEAM_CREDS == 'true'
+        id: edition
+        env:
+          EDITION: ${{ inputs.edition || 'full' }}
+          FULL_APP_ID: ${{ vars.STEAM_APP_ID }}
+          FULL_DEPOT_WINDOWS_ID: ${{ vars.STEAM_DEPOT_WINDOWS_ID }}
+          FULL_DEPOT_MACOS_ID: ${{ vars.STEAM_DEPOT_MACOS_ID }}
+          FULL_DEPOT_LINUX_ID: ${{ vars.STEAM_DEPOT_LINUX_ID }}
+          DEMO_APP_ID: ${{ vars.STEAM_DEMO_APP_ID }}
+          DEMO_DEPOT_WINDOWS_ID: ${{ vars.STEAM_DEMO_DEPOT_WINDOWS_ID }}
+          DEMO_DEPOT_MACOS_ID: ${{ vars.STEAM_DEMO_DEPOT_MACOS_ID }}
+          DEMO_DEPOT_LINUX_ID: ${{ vars.STEAM_DEMO_DEPOT_LINUX_ID }}
+        run: |
+          case "$EDITION" in
+            full)
+              APP_ID="$FULL_APP_ID"
+              DEPOT_WINDOWS_ID="$FULL_DEPOT_WINDOWS_ID"
+              DEPOT_MACOS_ID="$FULL_DEPOT_MACOS_ID"
+              DEPOT_LINUX_ID="$FULL_DEPOT_LINUX_ID"
+              ARTIFACT_PATTERN="desktop-*"
+              PRODUCT_LABEL="Conversation Simulator"
+              ;;
+            demo)
+              APP_ID="$DEMO_APP_ID"
+              DEPOT_WINDOWS_ID="$DEMO_DEPOT_WINDOWS_ID"
+              DEPOT_MACOS_ID="$DEMO_DEPOT_MACOS_ID"
+              DEPOT_LINUX_ID="$DEMO_DEPOT_LINUX_ID"
+              ARTIFACT_PATTERN="demo-desktop-*"
+              PRODUCT_LABEL="Conversation Simulator Demo"
+              if [ -z "$APP_ID" ] || [ -z "$DEPOT_WINDOWS_ID" ] || [ -z "$DEPOT_MACOS_ID" ] || [ -z "$DEPOT_LINUX_ID" ]; then
+                echo "ERROR: edition=demo but the demo app is not registered in this repository." >&2
+                echo "       Set STEAM_DEMO_APP_ID and STEAM_DEMO_DEPOT_{WINDOWS,MACOS,LINUX}_ID as" >&2
+                echo "       repository variables. See publishing/STEAM_NEXT_FEST_DEMO.md." >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "ERROR: unknown edition '$EDITION' (expected 'full' or 'demo')." >&2
+              exit 1
+              ;;
+          esac
+          {
+            echo "edition=$EDITION"
+            echo "app_id=$APP_ID"
+            echo "depot_windows_id=$DEPOT_WINDOWS_ID"
+            echo "depot_macos_id=$DEPOT_MACOS_ID"
+            echo "depot_linux_id=$DEPOT_LINUX_ID"
+            echo "artifact_pattern=$ARTIFACT_PATTERN"
+            echo "product_label=$PRODUCT_LABEL"
+          } >> "$GITHUB_OUTPUT"
+          echo "Edition: $EDITION — artifacts '$ARTIFACT_PATTERN' → App ID [REDACTED]"
+
       # ── Resolve build description ──────────────────────────────────────────
       - name: Resolve build description
         if: env.HAS_STEAM_CREDS == 'true'
@@ -207,11 +295,12 @@ jobs:
         env:
           BUILD_DESCRIPTION: ${{ inputs.build_description }}
           RELEASE_TAG: ${{ inputs.release_tag }}
+          PRODUCT_LABEL: ${{ steps.edition.outputs.product_label }}
         run: |
           if [ -n "$BUILD_DESCRIPTION" ]; then
             printf 'value=%s\n' "$BUILD_DESCRIPTION" >> "$GITHUB_OUTPUT"
           else
-            printf 'value=Conversation Simulator %s\n' "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+            printf 'value=%s %s\n' "$PRODUCT_LABEL" "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           fi
 
       # ── Download GitHub release assets ─────────────────────────────────────
@@ -221,12 +310,15 @@ jobs:
       # release tag. (This step used to `gh release download` the published
       # installers — with a --skip-errors flag that does not exist in gh, so it had
       # never once succeeded.)
+      # The pattern is per edition: demo builds upload as demo-desktop-* (a
+      # prefix the full app's desktop-* glob cannot match) so the two payloads
+      # can never be confused even if they were ever in one run.
       - name: Download desktop build artifacts
         if: env.HAS_STEAM_CREDS == 'true'
         uses: actions/download-artifact@v7
         with:
           path: release-artifacts
-          pattern: desktop-*
+          pattern: ${{ steps.edition.outputs.artifact_pattern }}
           merge-multiple: true
           run-id: ${{ inputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -435,11 +527,14 @@ jobs:
       # ── Generate SteamPipe build scripts from VDF templates ────────────────
       - name: Generate SteamPipe VDF files
         if: env.HAS_STEAM_CREDS == 'true'
+        # The App ID and depot IDs come from the Resolve-edition step: the paid
+        # base app's STEAM_* variables, or the demo app's STEAM_DEMO_* ones.
+        # The same VDF templates serve both — only the IDs differ.
         env:
-          STEAM_APP_ID:            ${{ vars.STEAM_APP_ID }}
-          STEAM_DEPOT_WINDOWS_ID:  ${{ vars.STEAM_DEPOT_WINDOWS_ID }}
-          STEAM_DEPOT_MACOS_ID:    ${{ vars.STEAM_DEPOT_MACOS_ID }}
-          STEAM_DEPOT_LINUX_ID:    ${{ vars.STEAM_DEPOT_LINUX_ID }}
+          STEAM_APP_ID:            ${{ steps.edition.outputs.app_id }}
+          STEAM_DEPOT_WINDOWS_ID:  ${{ steps.edition.outputs.depot_windows_id }}
+          STEAM_DEPOT_MACOS_ID:    ${{ steps.edition.outputs.depot_macos_id }}
+          STEAM_DEPOT_LINUX_ID:    ${{ steps.edition.outputs.depot_linux_id }}
           STEAM_BUILD_DESCRIPTION: ${{ steps.desc.outputs.value }}
           STEAM_SET_LIVE_BRANCH:   ${{ inputs.set_live_branch }}
         run: |

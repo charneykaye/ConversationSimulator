@@ -425,6 +425,30 @@ impl SteamRuntime {
     /// This is a best-effort call: it opens the overlay and returns `true` if
     /// Steam is available, or `false` if not. The actual upload is handled by
     /// the Steam client — no pack content is transmitted by this function.
+    /// Open the Steam overlay on the store page of `app_id` (the demo's
+    /// upsell to the full game, issue #495). Steam's own guidance for demos is
+    /// to keep the player in the overlay rather than bounce them to a browser.
+    ///
+    /// Returns `false` when not running under Steam, when the overlay is
+    /// disabled (it cannot show anything), or when the `steam` feature is
+    /// off; the caller falls back to the web store page.
+    pub fn open_store_page(&self, app_id: u32) -> bool {
+        #[cfg(feature = "steam")]
+        if let Some(ref client) = self.client {
+            if !client.utils().is_overlay_enabled() {
+                return false;
+            }
+            client.friends().activate_game_overlay_to_store(
+                steamworks::AppId(app_id),
+                steamworks::OverlayToStoreFlag::None,
+            );
+            return true;
+        }
+        #[cfg(not(feature = "steam"))]
+        let _ = app_id;
+        false
+    }
+
     ///
     /// The `pack_path` argument must be the absolute path to a directory that
     /// has already passed two-phase pack validation; the caller is responsible
@@ -878,6 +902,15 @@ mod tests {
         without_steam_env_vars(|| {
             let (_status, runtime) = init();
             assert!(!runtime.activate_overlay());
+        });
+    }
+
+    #[test]
+    fn open_store_page_returns_false_without_steam() {
+        // The demo's upsell then opens the web store page instead.
+        without_steam_env_vars(|| {
+            let (_status, runtime) = init();
+            assert!(!runtime.open_store_page(4_963_030));
         });
     }
 

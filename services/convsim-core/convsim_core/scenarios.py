@@ -607,7 +607,13 @@ def load_scenario_info_from_pack(
     )
 
 
-def resolve_scenario_info(scenario_id: str, conn: Any = None) -> ScenarioInfo | None:
+def resolve_scenario_info(
+    scenario_id: str,
+    conn: Any = None,
+    *,
+    prefer_installed_pack: bool = False,
+    pack_id: str | None = None,
+) -> ScenarioInfo | None:
     """Resolve a scenario for the session engine, falling back to installed packs.
 
     Resolution order: built-in catalog → dynamic registry → installed pack
@@ -615,22 +621,66 @@ def resolve_scenario_info(scenario_id: str, conn: Any = None) -> ScenarioInfo | 
     registered in the dynamic registry so subsequent calls (start/turn/debrief
     on the same session) resolve without touching the DB again.
 
+    ``prefer_installed_pack`` inverts the order: the installed pack (optionally
+    constrained to ``pack_id``) is consulted before the built-in catalog, and
+    the catalog is only a last resort. The demo edition (issue #495) plays the
+    official packs' curated flagship scenarios, three of which share an id
+    with an older hardcoded catalog entry; catalog-first would start the
+    hardcoded version while the card advertises the pack YAML. ``pack_id``
+    additionally pins the lookup to one pack, so a foreign pack that happens
+    to reuse a slug can never be the one that plays.
+
     Before this fallback existed only the handful of hardcoded catalog
     scenarios were playable: every other seeded library scenario failed
     session creation with "Unknown scenario_id" — the library advertised 21
     scenarios and could start 6.
     """
+    if prefer_installed_pack and conn is not None:
+        info = _load_installed_pack_scenario(scenario_id, conn, pack_id=pack_id)
+        if info is not None:
+            return info
+        return SCENARIOS.get(scenario_id)
+
     info = get_scenario_info(scenario_id)
     if info is not None or conn is None:
         return info
+    return _load_installed_pack_scenario(scenario_id, conn, pack_id=pack_id)
 
-    try:
-        row = conn.execute(
+
+# Pack-loaded scenarios resolved with a pack constraint are cached under a key
+# that includes the pack, so the plain (catalog-first) dynamic registry can never
+# hand back a same-slug scenario from a different pack.
+_pinned_registry: Dict[tuple[str, str], ScenarioInfo] = {}
+
+
+def _load_installed_pack_scenario(
+    scenario_id: str, conn: Any, *, pack_id: str | None = None
+) -> ScenarioInfo | None:
+    """Load ``scenario_id`` from the installed pack index, or None."""
+    if pack_id is not None:
+        cached = _pinned_registry.get((pack_id, scenario_id))
+        if cached is not None:
+            return cached
+        sql = (
             "SELECT s.rel_path, s.slug, p.source_path, p.supported_languages_json "
             "FROM scenarios s JOIN packs p ON s.pack_id = p.id "
-            "WHERE s.slug = ? LIMIT 1",
-            (scenario_id,),
-        ).fetchone()
+            "WHERE s.slug = ? AND p.slug = ? LIMIT 1"
+        )
+        params: tuple[str, ...] = (scenario_id, pack_id)
+    else:
+        with _dynamic_lock:
+            cached = _dynamic_registry.get(scenario_id)
+        if cached is not None:
+            return cached
+        sql = (
+            "SELECT s.rel_path, s.slug, p.source_path, p.supported_languages_json "
+            "FROM scenarios s JOIN packs p ON s.pack_id = p.id "
+            "WHERE s.slug = ? LIMIT 1"
+        )
+        params = (scenario_id,)
+
+    try:
+        row = conn.execute(sql, params).fetchone()
     except Exception:
         return None
     if row is None or not row["source_path"] or not row["rel_path"]:
@@ -654,5 +704,9 @@ def resolve_scenario_info(scenario_id: str, conn: Any = None) -> ScenarioInfo | 
     except Exception:
         return None
 
-    register_dynamic_scenario(scenario_id, info)
+    if pack_id is not None:
+        with _dynamic_lock:
+            _pinned_registry[(pack_id, scenario_id)] = info
+    else:
+        register_dynamic_scenario(scenario_id, info)
     return info

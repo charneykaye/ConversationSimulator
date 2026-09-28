@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useNavigate } from 'react-router-dom'
 import type { PerformanceWarning } from '@convsim/shared'
+import { useIsDemo } from '../edition'
 
 interface PerformanceWarningBannerProps {
   warnings: PerformanceWarning[]
@@ -8,6 +9,10 @@ interface PerformanceWarningBannerProps {
 
 export default function PerformanceWarningBanner({ warnings }: PerformanceWarningBannerProps) {
   const navigate = useNavigate()
+  // The demo edition (issue #495) hides the runtime section of Settings, so
+  // the button would land the player on a page with nothing to adjust. The
+  // warning text itself still shows.
+  const isDemo = useIsDemo()
 
   if (warnings.length === 0) return null
 
@@ -41,6 +46,7 @@ export default function PerformanceWarningBanner({ warnings }: PerformanceWarnin
           <span>
             <strong>{w.title}:</strong> {w.detail}
           </span>
+          {!isDemo && (
           <button
             onClick={() => navigate('/settings')}
             aria-label="Open Runtime Settings"
@@ -57,6 +63,7 @@ export default function PerformanceWarningBanner({ warnings }: PerformanceWarnin
           >
             Runtime Settings
           </button>
+          )}
         </div>
       ))}
     </div>

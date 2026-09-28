@@ -6,6 +6,7 @@ import { useTranslation } from '../i18n'
 import { useGamepadNavigation } from '../hooks/useGamepadNavigation'
 import { useSteamKeyboard } from '../hooks/useSteamKeyboard'
 import { useSteamOverlay } from '../hooks/useSteamOverlay'
+import { useIsDemo } from '../edition'
 
 const linkStyle = ({ isActive }: { isActive: boolean }): React.CSSProperties => ({
   padding: '0.4rem 0.75rem',
@@ -88,15 +89,26 @@ export default function AppLayout() {
   const mainRef = useRef<HTMLElement>(null)
   const isInitialMount = useRef(true)
   const { t } = useTranslation()
+  const isDemo = useIsDemo()
 
-  const NAV_LINKS = [
-    { to: '/', label: t('nav.home'), end: true },
-    { to: '/library', label: t('nav.scenarios'), end: false },
-    { to: '/logbook', label: t('nav.logbook'), end: false },
-    { to: '/workbench', label: t('nav.workbench'), end: false },
-    { to: '/settings', label: t('nav.settings'), end: false },
-    { to: '/support', label: t('nav.support'), end: false },
-  ]
+  // The demo edition (issue #495) keeps Home (where its five conversations
+  // live), Settings (privacy controls stay in every edition) and Support
+  // (Next Fest feedback needs the crash-bundle path). Library, Logbook and
+  // Workbench are full-app surfaces and are not shown at all.
+  const NAV_LINKS = isDemo
+    ? [
+        { to: '/', label: t('nav.home'), end: true },
+        { to: '/settings', label: t('nav.settings'), end: false },
+        { to: '/support', label: t('nav.support'), end: false },
+      ]
+    : [
+        { to: '/', label: t('nav.home'), end: true },
+        { to: '/library', label: t('nav.scenarios'), end: false },
+        { to: '/logbook', label: t('nav.logbook'), end: false },
+        { to: '/workbench', label: t('nav.workbench'), end: false },
+        { to: '/settings', label: t('nav.settings'), end: false },
+        { to: '/support', label: t('nav.support'), end: false },
+      ]
 
   // Controller navigation: D-pad / left-stick moves focus, A = confirm, B = back,
   // R1 = push-to-talk.  No-ops in the browser when no gamepad is connected.
@@ -139,6 +151,25 @@ export default function AppLayout() {
       >
         <span style={{ fontWeight: 700, marginRight: '1rem', letterSpacing: '-0.02em' }}>
           {t('nav.appTitle')}
+          {isDemo && (
+            <span
+              data-testid="edition-badge"
+              style={{
+                marginLeft: '0.5rem',
+                padding: '0.1rem 0.45rem',
+                borderRadius: '4px',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: '#a5b4fc',
+                border: '1px solid rgba(165,180,252,0.5)',
+                verticalAlign: 'middle',
+              }}
+            >
+              {t('nav.demoBadge')}
+            </span>
+          )}
         </span>
         <nav aria-label={t('nav.mainNavigation')} style={{ display: 'flex', gap: '0.25rem', flex: 1 }}>
           {NAV_LINKS.map(({ to, label, end }) => (

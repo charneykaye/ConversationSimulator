@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { useEffect } from 'react'
 import { ActionButton, PrimaryButton, DetailRow } from '../primitives'
 import { errorMessage } from '../errorMessage'
 import { ApiErrorView } from '../../components/ApiErrorView'
@@ -12,6 +13,14 @@ interface ConfirmInstallStepProps {
 }
 
 export function ConfirmInstallStep({ flow, mode }: ConfirmInstallStepProps) {
+  // Arriving here without a selection (Retry before the registry loaded on
+  // the resume path) must not strand the player on an empty page: go back
+  // through 'loading', which ends on the chooser.
+  const hasModel = flow.selectedModel != null
+  const { setStep } = flow
+  useEffect(() => {
+    if (!hasModel) setStep('loading')
+  }, [hasModel, setStep])
   if (!flow.selectedModel) return null
   const m = flow.selectedModel
   const sha256Display = m.sha256 ?? 'Not available'

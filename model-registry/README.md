@@ -31,6 +31,14 @@ refuses to start a download if either field is missing or equals `PENDING`.
 | High-quality | Mistral Small 3.1 24B Q4\_K\_M     | 14.3 GB | 16 GB    |
 | User-supplied | Any GGUF                          | varies  | varies   |
 
+### Demo edition
+
+The free Steam Next Fest demo installs exactly one model: the `role: starter`
+entry above, unless `CONVSIM_DEMO_MODEL_ID` names another registry id. That is
+the hook for evaluating a smaller/faster tier for the demo without a code
+change — see [`docs/steam-next-fest-demo.md`](../docs/steam-next-fest-demo.md)
+for the quality gate a candidate must clear.
+
 ## Mirror and fallback policy
 
 ### Primary source
@@ -76,7 +84,11 @@ deleted, the URL will return 404.  In that case:
 ### Adding a new model
 
 1. Add the entry to `registry.yaml` with the real download URL (pinned to a
-   commit SHA), verified SHA-256, and accurate `size_gb`.
+   commit SHA), verified SHA-256, and accurate `size_gb`. For a Hugging Face
+   GGUF, `python scripts/pin-model.py <org/repo> <file.gguf> --id … --role …
+   --min-vram … --recommended-vram …` prints a policy-compliant entry: the
+   Hub's Git-LFS object id is the file's SHA-256 and the repo's current commit
+   pins the URL, so nothing has to be downloaded to hash it.
 2. Do **not** use `PENDING` — the per-PR CI (`test_actual_registry_no_pending_values`)
    will reject the PR until real values are present.
 3. Run `python scripts/validate-registry.py --url-check` locally to confirm
