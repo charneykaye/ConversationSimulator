@@ -390,6 +390,26 @@ def test_demo_plays_the_pack_version_of_every_curated_conversation(demo_client):
         assert opening["payload"]["content"] == _pack_opening(s.pack_id, s.scenario_id), s.scenario_id
 
 
+def test_demo_every_offered_difficulty_starts_a_session(demo_client):
+    """Gate D-04: every card starts at every difficulty its card offers.
+
+    The setup page renders exactly the card's ``difficulty.options`` and posts
+    the chosen one; when the session resolved the built-in catalogue entry
+    instead of the pack YAML, ``spanish_coffee`` offered four rungs but the
+    built-in ladder had three, and "adversarial" answered 400.
+    """
+    client, _ = demo_client
+    cards = {s["scenario_id"]: s for s in client.get("/api/scenarios").json()}
+    for s in edition.DEMO_SCENARIOS:
+        lang = cards[s.scenario_id]["supported_languages"][0]
+        options = list(cards[s.scenario_id]["difficulty"]["options"])
+        assert options, s.scenario_id
+        for level in options:
+            body = {**_session_body(s.scenario_id, lang), "difficulty": level}
+            created = client.post("/api/sessions", json=body)
+            assert created.status_code == 201, f"{s.scenario_id}@{level}: {created.text}"
+
+
 def test_full_edition_resolution_order_is_unchanged(full_client):
     """The full app keeps catalogue-first resolution for catalogue ids."""
     from convsim_core.scenarios import SCENARIOS
