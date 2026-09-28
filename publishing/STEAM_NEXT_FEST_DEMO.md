@@ -26,7 +26,7 @@
 | Demo App ID | **5343430** (`STEAM_DEMO_APP_ID`) — store page `https://store.steampowered.com/app/5343430/` once live |
 | Packages | Store package **1846149** (free, what "Download Demo" grants) · beta-testing package **1846148** (tester keys) · developer-comp package **1846147** (auto-granted to the publisher) |
 | Store item | **1348530** |
-| Depots | Three, one per platform, mirroring the base app. Valve auto-created **5343431** (`Conversation Simulator Demo Content`, OS = All): reconfigure it as the Windows depot and add macOS and Linux depots — step 1.2 |
+| Depots | Three, one per platform, mirroring the base app: **5343431** Windows (reshaped from Valve's auto-created all-OS depot), **5343432** macOS, **5343433** Linux/SteamOS — configured and published 2026-09-28 (step 1.2) |
 | Branches | `default` (what Next Fest players get), `beta` (internal verification) |
 | Build source | `release.yml` → **Run workflow** → `edition: demo`, from an existing release tag |
 | Upload | `steam-deploy.yml` with `edition: demo` (chained automatically from the demo build) |
@@ -73,25 +73,29 @@ into the `STEAM_DEMO_APP_ID` repository variable.
 
 On the **demo** app (not the base app):
 
-- **Depots:** exactly three — Windows x86-64, macOS, Linux/SteamOS — in the
-  same order as the base app. Valve auto-created a single all-OS depot,
+- **Depots — done 2026-09-28:** exactly three — Windows x86-64, macOS,
+  Linux/SteamOS — in the same order as the base app. Valve auto-created a
+  single all-OS depot,
   **5343431** `Conversation Simulator Demo Content`, attached to all three
   packages; do not upload to it as-is (every player would download every
   platform's binaries). Instead:
   1. Edit 5343431: rename `Conversation Simulator Demo — Windows`, OS =
      Windows. This is `STEAM_DEMO_DEPOT_WINDOWS_ID`.
   2. Add `Conversation Simulator Demo — macOS` (OS = macOS) and
-     `Conversation Simulator Demo — Linux` (OS = Linux) — expected IDs
-     5343432 and 5343433; confirm in the portal.
+     `Conversation Simulator Demo — Linux` (OS = Linux) — IDs **5343432**
+     (macOS) and **5343433** (Linux), confirmed in the portal.
   3. Attach both new depots to packages 1846147, 1846148 and 1846149.
   4. Publish the app configuration (App Admin → Publish). Depot changes are
      not live — and `steamcmd` cannot target them — until published.
+     Published 2026-09-28.
   Record the three IDs in [`STEAM_APP_REGISTRATION.md`](STEAM_APP_REGISTRATION.md#identifiers).
-- **Launch options** are the same shape as the base app's (no arguments on
-  any platform). The demo's `.app` bundle is named after its product name, but
-  the executable inside it keeps Tauri's main binary name — the Cargo package
-  name `convsim-desktop`, which Tauri does not rename to the product name — so
-  only the bundle part of the macOS path differs:
+- **Launch options — done 2026-09-28** (the macOS path is still to be
+  confirmed against the first uploaded build, below) — are the same shape as
+  the base app's (no arguments on any platform). The demo's `.app` bundle is
+  named after its product name, but the executable inside it keeps Tauri's
+  main binary name — the Cargo package name `convsim-desktop`, which Tauri
+  does not rename to the product name — so only the bundle part of the macOS
+  path differs:
 
   | Platform | Executable | Working directory |
   |----------|-----------|-------------------|
@@ -138,9 +142,9 @@ fall through to the paid app's depots — `steam-deploy.yml` refuses to run
 | Variable | Value |
 |----------|-------|
 | `STEAM_DEMO_APP_ID` | `5343430` |
-| `STEAM_DEMO_DEPOT_WINDOWS_ID` | `5343431` (after it is reconfigured as the Windows depot in step 1.2) |
-| `STEAM_DEMO_DEPOT_MACOS_ID` | The macOS depot added in step 1.2 (expected `5343432`) |
-| `STEAM_DEMO_DEPOT_LINUX_ID` | The Linux/SteamOS depot added in step 1.2 (expected `5343433`) |
+| `STEAM_DEMO_DEPOT_WINDOWS_ID` | `5343431` (reconfigured as the Windows depot in step 1.2) |
+| `STEAM_DEMO_DEPOT_MACOS_ID` | `5343432` (the macOS depot added in step 1.2) |
+| `STEAM_DEMO_DEPOT_LINUX_ID` | `5343433` (the Linux/SteamOS depot added in step 1.2) |
 
 The CI build account (`STEAM_USERNAME`) needs **Developer** permissions on
 App 5343430 as well as on 4963030 — Valve does not inherit app permissions
