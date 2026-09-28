@@ -77,17 +77,38 @@ export function reconcileEdition(state: EditionState, health: HealthResponse): E
 // provider — every screen-level test — still reads the build flag at call time.
 export const EditionContext = createContext<EditionState | null>(null)
 
+/** How often to re-ask the engine while it is still coming up. */
+export const EDITION_POLL_INTERVAL_MS = 3000
+
 export function EditionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<EditionState>(initialState)
 
+  // Ask the engine until it answers once. The provider sits above
+  // CoreStartupGuard, so in the desktop shell the first call usually lands
+  // before the sidecar listens; a single fire-and-forget request would then
+  // lose the engine's edition and the demo's curated list for the whole
+  // session. Poll at the health hook's cadence and stop after the first
+  // successful answer — the edition cannot change while the app is open.
   useEffect(() => {
     let cancelled = false
-    void api.health().then((r) => {
-      if (cancelled || !r.ok) return
-      setState((prev) => reconcileEdition(prev, r.data))
-    })
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const ask = () => {
+      void api.health().then((r) => {
+        if (cancelled) return
+        if (r.ok) {
+          setState((prev) => reconcileEdition(prev, r.data))
+          return
+        }
+        timer = setTimeout(ask, EDITION_POLL_INTERVAL_MS)
+      }).catch(() => {
+        if (cancelled) return
+        timer = setTimeout(ask, EDITION_POLL_INTERVAL_MS)
+      })
+    }
+    ask()
     return () => {
       cancelled = true
+      if (timer != null) clearTimeout(timer)
     }
   }, [])
 

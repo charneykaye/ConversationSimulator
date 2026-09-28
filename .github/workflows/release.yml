@@ -53,6 +53,25 @@ jobs:
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
           VERSION="${TAG%%-*}"
           bash scripts/check-docs-freshness.sh "$VERSION"
+      # A workflow_dispatch builds whatever ref it was started from; the `tag`
+      # input only names the release. The demo (issue #495) must be the same
+      # source as the full build it accompanies, so refuse to build it from
+      # anything but that tag's commit. build-desktop needs this job, so a
+      # mismatch stops the run before a single binary is compiled.
+      - name: Demo builds come from the release tag
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.edition == 'demo' }}
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "refs/tags/$TAG:refs/tags/$TAG"
+          TAG_SHA="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::edition=demo must be run from tag $TAG ($TAG_SHA), but this run is on $GITHUB_SHA." \
+                 "In 'Run workflow', choose the tag under 'Use workflow from' — see publishing/STEAM_NEXT_FEST_DEMO.md §2."
+            exit 1
+          fi
+          echo "OK: building the demo from $TAG ($TAG_SHA)."
 
   # ── Cross-platform desktop builds ─────────────────────────────────────────────
   build-desktop:
@@ -1720,7 +1739,17 @@ jobs:
     name: Upload to Defender [Windows]
     needs: [build-desktop, release]
     runs-on: ubuntu-latest
-    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    # Full edition: after the release job. Demo edition (issue #495): the
+    # release job is skipped by design, so gate on the builds instead — the
+    # demo's Windows depot payload gets the same Defender-for-Storage verdict
+    # (runbook gate D-07), it just has no GitHub release to annotate.
+    if: >-
+      ${{ !cancelled()
+          && needs.build-desktop.result == 'success'
+          && (needs.release.result == 'success'
+              || (needs.release.result == 'skipped' && (github.event.inputs.edition || 'full') == 'demo')) }}
+    env:
+      EDITION: ${{ github.event.inputs.edition || 'full' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -1758,7 +1787,8 @@ jobs:
         if: steps.secrets_check.outputs.skip == 'false'
         uses: actions/download-artifact@v7
         with:
-          name: desktop-Windows-x86_64
+          # Demo builds upload as demo-desktop-* (see build-desktop).
+          name: ${{ env.EDITION == 'demo' && 'demo-desktop-' || 'desktop-' }}Windows-x86_64
           path: windows-artifact
 
       - name: Create signed-build zip
@@ -1771,7 +1801,11 @@ jobs:
         env:
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          BLOB_NAME="${TAG}-signed-build.zip"
+          if [ "$EDITION" = "demo" ]; then
+            BLOB_NAME="${TAG}-demo-signed-build.zip"
+          else
+            BLOB_NAME="${TAG}-signed-build.zip"
+          fi
           echo "BLOB_NAME=$BLOB_NAME" >> "$GITHUB_ENV"
           cd windows-artifact && zip -r "../$BLOB_NAME" . && cd ..
           ls -lh "$BLOB_NAME"
@@ -1845,6 +1879,14 @@ jobs:
           PORTAL_URL="https://portal.azure.com/#@/resource/${RESOURCE_PATH}/overview"
           echo "portal_url=$PORTAL_URL" >> "$GITHUB_OUTPUT"
           echo "  Portal URL: $PORTAL_URL"
+
+          # Demo builds publish no GitHub release, so there is nothing to
+          # annotate: the verdict is read in the portal and recorded on the
+          # demo's review row (publishing/STEAM_NEXT_FEST_DEMO.md §4.4).
+          if [ "$EDITION" = "demo" ]; then
+            echo "  INFO  Demo build: no GitHub release to annotate. Blob: $BLOB_NAME"
+            exit 0
+          fi
 
           # Idempotent release-note append.
           # The HTML marker string is searched in the current release body; if

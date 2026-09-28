@@ -250,6 +250,7 @@ async def validate_pack(
 @router.get("/{pack_slug}/export")
 async def export_pack(pack_slug: str, request: Request) -> Response:
     """Download an installed pack as a zip archive."""
+    _require_full_edition(request)
     db = request.app.state.db
     zip_bytes, filename = export_to_zip(pack_slug, db.connection())
     return Response(

@@ -24,6 +24,7 @@ developer content and are never part of the demo. See
 """
 from __future__ import annotations
 
+import logging
 import sqlite3
 from dataclasses import dataclass
 from typing import Any, Iterable, Optional, TypeVar
@@ -31,6 +32,8 @@ from typing import Any, Iterable, Optional, TypeVar
 from fastapi import Request
 
 from convsim_core.errors import ConvsimError
+
+logger = logging.getLogger(__name__)
 
 FULL_EDITION = "full"
 DEMO_EDITION = "demo"
@@ -89,6 +92,14 @@ def demo_scenario_allowed(pack_id: Optional[str], scenario_id: Optional[str]) ->
     return (pack_id, scenario_id) in _DEMO_KEYS
 
 
+def demo_pack_id_for(scenario_id: Optional[str]) -> Optional[str]:
+    """The official pack a demo conversation is played from, or None."""
+    for s in DEMO_SCENARIOS:
+        if s.scenario_id == scenario_id:
+            return s.pack_id
+    return None
+
+
 def demo_scenario_id_allowed(scenario_id: Optional[str]) -> bool:
     """Whether a scenario id (without pack context) is a demo conversation.
 
@@ -128,7 +139,22 @@ def resolve_demo_model_id(conn: sqlite3.Connection, config: Any) -> Optional[str
     """
     pinned = (getattr(config, "demo_model_id", None) or "").strip()
     if pinned:
-        return pinned
+        try:
+            hit = conn.execute(
+                "SELECT id FROM model_registry WHERE id = ? LIMIT 1", (pinned,)
+            ).fetchone()
+        except sqlite3.Error:
+            hit = None
+        if hit is not None:
+            return pinned
+        # A pin that names nothing in the registry (a typo, or an entry not yet
+        # seeded) would advertise a model the wizard can never install — a
+        # first-run dead end. Fall back to the starter and say so loudly.
+        logger.error(
+            "CONVSIM_DEMO_MODEL_ID=%r is not in the model registry; "
+            "falling back to the registry's starter model",
+            pinned,
+        )
     try:
         row = conn.execute(
             "SELECT id FROM model_registry WHERE role = 'starter' ORDER BY id LIMIT 1"
@@ -136,6 +162,39 @@ def resolve_demo_model_id(conn: sqlite3.Connection, config: Any) -> Optional[str
     except sqlite3.Error:
         return None
     return row["id"] if row is not None else None
+
+
+def demo_model_paths(conn: sqlite3.Connection, config: Any) -> set[str]:
+    """Filesystem paths under which the demo model has been (or is being) installed.
+
+    The runtime selection and sidecar routes take a model *path*; in the demo
+    only the curated model's own install paths are acceptable.
+    """
+    demo_id = resolve_demo_model_id(conn, config)
+    if demo_id is None:
+        return set()
+    try:
+        rows = conn.execute(
+            "SELECT file_path FROM installed_models WHERE registry_id = ?", (demo_id,)
+        ).fetchall()
+    except sqlite3.Error:
+        return set()
+    return {str(r["file_path"]) for r in rows if r["file_path"]}
+
+
+def require_demo_model_path(conn: sqlite3.Connection, config: Any, model_path: Optional[str]) -> None:
+    """Refuse a model path that is not the demo model's own install (demo only)."""
+    if not is_demo(config):
+        return
+    if model_path and model_path in demo_model_paths(conn, config):
+        return
+    raise ConvsimError(
+        EDITION_RESTRICTED,
+        "Only the demo's own AI model can be used in the demo edition. The full "
+        "version of Conversation Simulator adds the standard and high-quality "
+        "tiers, Ollama, and your own GGUF files.",
+        status_code=403,
+    )
 
 
 def demo_model_allowed(conn: sqlite3.Connection, config: Any, registry_id: str) -> bool:

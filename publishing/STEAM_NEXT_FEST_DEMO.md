@@ -32,7 +32,7 @@
 | Upload | `steam-deploy.yml` with `edition: demo` (chained automatically from the demo build) |
 | Payload | Same depot layout as the base app; the binaries are compiled as the demo edition |
 | Store assets | Base capsules with a "DEMO" ribbon; demo-edition screenshots; base trailer |
-| Next Fest target | First edition whose registration is open ≥ 6 weeks after the demo gate passes (see [Timeline](#next-fest-timeline)) |
+| Next Fest target | First edition whose registration is open ≥ 6 weeks after the demo gate passes (see [Timeline](#52-next-fest-timeline)) |
 
 ---
 
@@ -87,14 +87,24 @@ On the **demo** app (not the base app):
   4. Publish the app configuration (App Admin → Publish). Depot changes are
      not live — and `steamcmd` cannot target them — until published.
   Record the three IDs in [`STEAM_APP_REGISTRATION.md`](STEAM_APP_REGISTRATION.md#identifiers).
-- **Launch options** are the same shape as the base app's. The demo bundle is
-  named after its product name, so the macOS executable path differs:
+- **Launch options** are the same shape as the base app's (no arguments on
+  any platform). The demo's `.app` bundle is named after its product name, but
+  the executable inside it keeps Tauri's main binary name — the Cargo package
+  name `convsim-desktop`, which Tauri does not rename to the product name — so
+  only the bundle part of the macOS path differs:
 
   | Platform | Executable | Working directory |
   |----------|-----------|-------------------|
   | Windows | `ConversationSimulator.exe` | *(depot root)* |
-  | macOS | `Conversation Simulator Demo.app/Contents/MacOS/Conversation Simulator Demo` | *(depot root)* |
+  | macOS | `Conversation Simulator Demo.app/Contents/MacOS/convsim-desktop` | *(depot root)* |
   | Linux | `ConversationSimulator.AppImage` | *(depot root)* |
+
+  Before saving the macOS row, confirm it against the first uploaded build:
+  Steamworks → Builds → *View Manifest* on the macOS depot lists the exact
+  path, and `CFBundleExecutable` in the `.app`'s `Contents/Info.plist` (from
+  the `demo-desktop-macOS-*` artifact) must read `convsim-desktop`. A launch
+  option naming a file that does not exist is a demo that never starts on
+  macOS (gate D-03).
 
   The Windows executable keeps the base app's name: the depot packaging step
   renames the Rust binary regardless of edition, and the artifact-inspection
@@ -146,7 +156,10 @@ always the demo *of* a specific base version, and it reuses that tag's
 validated source, version stamp and docs-freshness check.
 
 1. **Actions → Release → Run workflow.**
-2. `tag`: the base release tag (e.g. `v0.2.8`). `edition`: **`demo`**.
+2. `tag`: the base release tag (e.g. `v0.2.8`). `edition`: **`demo`**. Under
+   *Use workflow from*, pick **that tag**, not `main`: a dispatch builds the
+   ref it was started from, and the Validate job refuses a demo run whose
+   commit is not the tag's.
 3. The run builds all three platforms with:
    - `VITE_CONVSIM_EDITION=demo` baked into the web bundle;
    - `CONVSIM_EDITION=demo` compiled into the Tauri shell (validated by
@@ -245,6 +258,13 @@ Valve reviews demos with the same checklist — the overlay must work
 (Shift+Tab, F12), the app must launch on a clean machine, and the store
 content must match the build. The demo inherits the base app's overlay
 surface and Steamworks bridge on Windows.
+
+Before approving the `steam-release` environment for a demo upload, read the
+Defender-for-Storage verdict the same way as for a base release
+([`WINDOWS_MALWARE_SCANNING.md`](WINDOWS_MALWARE_SCANNING.md)): the demo run's
+`defender-scan` job uploads the Windows payload as `<tag>-demo-signed-build.zip`
+and prints the portal link in its log. There is no GitHub release to carry the
+note for a demo, so record the verdict on this section's review row instead.
 
 ---
 

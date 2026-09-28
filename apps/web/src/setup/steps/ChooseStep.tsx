@@ -24,6 +24,17 @@ export function ChooseStep({ flow, mode }: ChooseStepProps) {
   const lb = flow.modelsData?.last_benchmark ?? null
   // Demo edition (issue #495): the curated model is the only option.
   const isDemo = useIsDemo()
+  // Whether the recommended model is already installed and ready. In the demo
+  // the manager is reachable with the model live (Home's LLM badge, the
+  // finish-setup banner), and offering to "Install" it again would run a
+  // no-op pipeline and bounce the player home.
+  const recommendedInstalled =
+    flow.recommendedModel != null &&
+    (flow.modelsData?.installed ?? []).some(
+      (m) =>
+        m.registry_id === flow.recommendedModel!.id &&
+        (m.install_status === 'ready' || m.install_status === 'complete'),
+    )
 
   return (
     <div style={{ maxWidth: '640px', margin: mode === 'wizard' ? '2rem auto' : undefined, padding: mode === 'wizard' ? '0 1rem' : undefined }}>
@@ -31,8 +42,16 @@ export function ChooseStep({ flow, mode }: ChooseStepProps) {
         {mode === 'wizard' ? 'Choose how to get started' : 'Set up your model'}
       </h1>
       <p style={{ color: '#a1a1aa', fontSize: '0.9rem' }}>
-        {mode === 'wizard' ? 'Pick an option below. You can change it later in Settings.' : 'Choose how to get started. You can change this later in Settings.'}
+        {isDemo
+          ? 'The demo uses one AI model. It downloads once and then runs entirely on your computer.'
+          : mode === 'wizard' ? 'Pick an option below. You can change it later in Settings.' : 'Choose how to get started. You can change this later in Settings.'}
       </p>
+
+      {isDemo && !flow.recommendedModel && (
+        <p role="alert" style={{ marginTop: '1rem', color: '#f87171', fontSize: '0.875rem' }}>
+          The demo model is not available from the conversation engine. Restart the app and try again.
+        </p>
+      )}
 
       {lb && (
         <div
@@ -71,9 +90,18 @@ export function ChooseStep({ flow, mode }: ChooseStepProps) {
                   </div>
                 )
               })()}
-              <ActionButton onClick={() => { flow.setSelectedModel(flow.recommendedModel); flow.resetAction(); flow.setStep('confirm-install') }}>
-                Install {flow.recommendedModel.name}
-              </ActionButton>
+              {isDemo && recommendedInstalled ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <span data-testid="demo-model-installed" style={{ color: '#6ee7b7', fontSize: '0.875rem', fontWeight: 600 }}>
+                    ✓ Installed and ready
+                  </span>
+                  <ActionButton onClick={() => flow.navigate('/')}>Back to Home</ActionButton>
+                </div>
+              ) : (
+                <ActionButton onClick={() => { flow.setSelectedModel(flow.recommendedModel); flow.resetAction(); flow.setStep('confirm-install') }}>
+                  Install {flow.recommendedModel.name}
+                </ActionButton>
+              )}
             </SectionCard>
           </li>
         )}

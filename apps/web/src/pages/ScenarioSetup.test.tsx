@@ -682,6 +682,18 @@ describe('ScenarioSetupPage', () => {
       expect(screen.getByTestId('missing-runtime-block')).toHaveTextContent(/model manager/i);
     });
 
+    it('opens the model manager from the missing-runtime hint', async () => {
+      // A working control, not prose about Settings: the demo edition hides
+      // the model section of Settings (issue #495).
+      mockApi.getScenario.mockResolvedValue({ ok: true as const, data: mockScenario });
+      mockApi.health.mockResolvedValue({ ok: true as const, data: healthNoLlm });
+      const onInstallModel = vi.fn();
+      renderSetup({ onInstallModel });
+      await waitFor(() => screen.getByText('Behavioral Interview'));
+      fireEvent.click(screen.getByTestId('open-model-manager'));
+      expect(onInstallModel).toHaveBeenCalledTimes(1);
+    });
+
     it('does not show the missing-runtime block when LLM is ready', async () => {
       mockApi.getScenario.mockResolvedValue({ ok: true as const, data: mockScenario });
       mockApi.health.mockResolvedValue({ ok: true as const, data: healthReady });

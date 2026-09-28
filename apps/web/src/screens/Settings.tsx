@@ -706,7 +706,9 @@ export default function Settings() {
       <section style={{ marginBottom: '2rem' }}>
         <SectionHeading>{t('settings.clearData.heading')}</SectionHeading>
         <p style={{ fontSize: '0.875rem', color: '#a1a1aa', marginBottom: '0.75rem' }}>
-          {t('settings.clearData.description')}
+          {/* The demo shares its data folder with the full version (issue #495),
+              so its copy says that clearing here clears both. */}
+          {t(isDemo ? 'demo.settings.clearData.description' : 'settings.clearData.description')}
         </p>
 
         {clearState === 'confirming' && (
@@ -722,7 +724,7 @@ export default function Settings() {
               color: '#fca5a5',
             }}
           >
-            {t('settings.clearData.confirmMessage')}
+            {t(isDemo ? 'demo.settings.clearData.confirmMessage' : 'settings.clearData.confirmMessage')}
           </div>
         )}
 

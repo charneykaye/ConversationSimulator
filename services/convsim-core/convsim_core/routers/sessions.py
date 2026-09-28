@@ -24,7 +24,12 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, field_validator
 
-from convsim_core.edition import EDITION_RESTRICTED, demo_scenario_id_allowed, is_demo
+from convsim_core.edition import (
+    EDITION_RESTRICTED,
+    demo_pack_id_for,
+    demo_scenario_id_allowed,
+    is_demo,
+)
 from convsim_core.runtime import build_runtime
 from convsim_core.runtime.active import (
     MODEL_FREE_RUNTIME_IDS,
@@ -47,6 +52,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 _VALID_STATES_FOR_TURN = {"PlayerTurnListening"}
+
+
+def _resolve_scenario(request: Request, scenario_id: str):
+    """Resolve a scenario the way this edition plays it.
+
+    The demo edition (issue #495) plays the official packs' curated
+    conversations, so it resolves pack-first and pinned to the curated pack;
+    the full app keeps the historical catalog-first order.
+    """
+    conn = request.app.state.db.connection()
+    if is_demo(request.app.state.service_config):
+        return resolve_scenario_info(
+            scenario_id,
+            conn,
+            prefer_installed_pack=True,
+            pack_id=demo_pack_id_for(scenario_id),
+        )
+    return resolve_scenario_info(scenario_id, conn)
 
 
 def _generate_session_id() -> str:
@@ -418,7 +441,7 @@ async def create_session(body: SessionCreateRequest, request: Request) -> Sessio
                 "code": EDITION_RESTRICTED,
             },
         )
-    info = resolve_scenario_info(body.scenario_id, request.app.state.db.connection())
+    info = _resolve_scenario(request, body.scenario_id)
     if info is None:
         raise HTTPException(status_code=400, detail=f"Unknown scenario_id: {body.scenario_id!r}")
 
@@ -508,7 +531,7 @@ async def start_session(session_id: str, request: Request) -> SessionStartRespon
             current_state,
         )
 
-    info = resolve_scenario_info(row["scenario_id"], request.app.state.db.connection())
+    info = _resolve_scenario(request, row["scenario_id"])
     opening_text = (
         info.opening_npc_says if info else "Hello! I am ready to begin. Please go ahead."
     )
@@ -603,7 +626,7 @@ async def submit_turn(session_id: str, body: TurnSubmitRequest, request: Request
     setup = json.loads(row["setup_json"])
     scenario_id = row["scenario_id"]
     difficulty = setup.get("difficulty", "standard")
-    info = resolve_scenario_info(scenario_id, request.app.state.db.connection())
+    info = _resolve_scenario(request, scenario_id)
     if info is None:
         raise HTTPException(status_code=500, detail=f"Scenario {scenario_id!r} not found in registry")
 
@@ -845,7 +868,7 @@ async def create_debrief(session_id: str, request: Request) -> DebriefResponse:
     scenario_id = row["scenario_id"]
     setup = json.loads(row["setup_json"])
     difficulty = setup.get("difficulty", "standard")
-    info = resolve_scenario_info(scenario_id, request.app.state.db.connection())
+    info = _resolve_scenario(request, scenario_id)
     if info is None:
         raise HTTPException(status_code=500, detail=f"Scenario {scenario_id!r} not found in registry")
 
@@ -1196,7 +1219,7 @@ async def export_session(session_id: str, request: Request) -> SessionExportResp
     setup = json.loads(row["setup_json"])
     save_transcript = setup.get("save_transcript", True)
     scenario_id = row["scenario_id"]
-    info = resolve_scenario_info(scenario_id, request.app.state.db.connection())
+    info = _resolve_scenario(request, scenario_id)
     scenario_meta: Dict[str, Any] = {
         "id": scenario_id,
         "name": info.scenario_data.title if info else scenario_id,

@@ -989,4 +989,13 @@ describe('demo edition', () => {
     expect(mockApi.getRuntimeSettings).not.toHaveBeenCalled()
     expect(mockApi.listVoices).not.toHaveBeenCalled()
   })
+
+  it('says that clearing local data also clears the full version, which shares the folder', async () => {
+    await renderDemoSettings()
+    expect(screen.getByText(/shared with the full version of conversation simulator/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /clear all local data/i }))
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/including those of the full version/i),
+    )
+  })
 })

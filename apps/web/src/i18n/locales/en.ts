@@ -60,7 +60,7 @@ export const en = {
       empty: 'No conversations are available yet. Finish setup to unlock them.',
       ordinal: 'Conversation {{n}}',
       role: 'You play: {{role}}',
-      language: 'in {{code}}',
+      language: 'in {{language}}',
       start: 'Start',
       startLabel: 'Start {{title}}',
     },
@@ -70,7 +70,7 @@ export const en = {
       body:
         'You are playing five of the conversations. The full version of Conversation Simulator adds the rest — and everything you practise here carries over.',
       bullets: {
-        library: 'The complete scenario library — 20+ conversations across six packs, plus premium packs',
+        library: 'The complete scenario library — 20 conversations across five packs, plus premium scenario packs',
         workbench: 'The Creator Workbench: write and share your own scenarios, characters, and rubrics',
         models: 'Model tiers, Ollama, and your own GGUF files for higher-quality characters',
         voice: 'Voice: speak your side and hear the reply, all processed on your machine',
@@ -86,6 +86,14 @@ export const en = {
       setMeUpDescription:
         'Downloads the demo\'s AI model ({{size}} GB, {{license}}). Works offline afterwards.',
       badge: 'Demo',
+    },
+    settings: {
+      clearData: {
+        description:
+          'Permanently deletes all sessions, transcripts, and cached data from your device. This folder is shared with the full version of Conversation Simulator on this computer, so its sessions and transcripts are deleted too. Installed models are not removed.',
+        confirmMessage:
+          'This will permanently delete all sessions and transcripts from this device — including those of the full version of Conversation Simulator, if it is installed. This cannot be undone.',
+      },
     },
   },
   home: {

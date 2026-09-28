@@ -299,7 +299,7 @@ $9.99, one-time — not a subscription, not a trial.
 
 The Conversation Simulator Steam edition is a one-time $9.99 purchase. It is the
 ready-to-run, code-signed, auto-updating package of a fully open-source
-application: the engine and the four official scenario packs are public on GitHub
+application: the engine and the five official scenario packs are public on GitHub
 under open licenses (Apache-2.0 and CC BY 4.0), so anyone can build and run the
 same software for free. The $9.99 pays for the packaged, maintained build and funds
 continued development — not for access.
@@ -563,7 +563,7 @@ a raise, a first ask, and Spanish at a café — with AI characters that run
 entirely on your computer. One model download, then everything works offline.
 ```
 
-Character count: 236. Within the 300-character limit.
+Character count: 228. Within the 300-character limit.
 
 ### Demo long description
 
@@ -593,7 +593,7 @@ Character count: 236. Within the 300-character limit.
 
 <h2>What the full game adds</h2>
 <ul>
-  <li>The complete scenario library — 20+ conversations across six packs, plus premium scenario packs.</li>
+  <li>The complete scenario library — 20 conversations across five packs, plus premium scenario packs.</li>
   <li>The Creator Workbench: write and share your own scenarios, characters, and rubrics.</li>
   <li>Model tiers, Ollama, and your own GGUF files for higher-quality characters.</li>
   <li>Voice: speak your side and hear the reply, all processed on your machine.</li>

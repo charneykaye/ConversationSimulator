@@ -65,7 +65,7 @@ export const de: LocaleMessages = {
       empty: 'Noch keine Gespräche verfügbar. Schließen Sie die Einrichtung ab, um sie freizuschalten.',
       ordinal: 'Gespräch {{n}}',
       role: 'Ihre Rolle: {{role}}',
-      language: 'auf {{code}}',
+      language: 'auf {{language}}',
       start: 'Starten',
       startLabel: '{{title}} starten',
     },
@@ -75,7 +75,7 @@ export const de: LocaleMessages = {
       body:
         'Sie spielen fünf der Gespräche. Die Vollversion des Gesprächssimulators enthält alle weiteren — und alles, was Sie hier üben, wird übernommen.',
       bullets: {
-        library: 'Die komplette Szenario-Bibliothek — über 20 Gespräche in sechs Paketen, plus Premium-Pakete',
+        library: 'Die komplette Szenario-Bibliothek — 20 Gespräche in fünf Paketen, plus Premium-Szenariopakete',
         workbench: 'Die Creator-Werkbank: eigene Szenarien, Figuren und Bewertungsraster schreiben und teilen',
         models: 'Modellstufen, Ollama und eigene GGUF-Dateien für hochwertigere Figuren',
         voice: 'Sprache: sprechen Sie Ihren Part und hören Sie die Antwort — alles auf Ihrem Rechner verarbeitet',
@@ -91,6 +91,14 @@ export const de: LocaleMessages = {
       setMeUpDescription:
         'Lädt das KI-Modell der Demo herunter ({{size}} GB, {{license}}). Funktioniert danach offline.',
       badge: 'Demo',
+    },
+    settings: {
+      clearData: {
+        description:
+          'Löscht dauerhaft alle Sitzungen, Transkripte und zwischengespeicherten Daten von Ihrem Gerät. Dieser Ordner wird mit der Vollversion des Gesprächssimulators auf diesem Computer geteilt; deren Sitzungen und Transkripte werden ebenfalls gelöscht. Installierte Modelle bleiben erhalten.',
+        confirmMessage:
+          'Alle Sitzungen und Transkripte auf diesem Gerät werden dauerhaft gelöscht — auch die der Vollversion des Gesprächssimulators, falls installiert. Dies kann nicht rückgängig gemacht werden.',
+      },
     },
   },
   home: {

@@ -8,6 +8,11 @@ summary: >-
   in a low-pressure service context. The target language is Japanese (ja).
   Difficulty controls language correction: warm = none, standard = light
   (implicit recasting), hard = explicit correction with practice prompts.
+# Target language first (issue #495): the setup page defaults to the first
+# entry and the demo card labels the conversation with it.
+supported_languages:
+  - ja
+  - en
 player_role:
   label: Language Learner
   brief: >-

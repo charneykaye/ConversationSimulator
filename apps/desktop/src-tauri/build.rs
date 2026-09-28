@@ -36,15 +36,37 @@ fn main() {
     // a typo cannot silently produce a full build labelled as a demo.
     println!("cargo:rerun-if-env-changed=CONVSIM_EDITION");
     if let Ok(raw) = std::env::var("CONVSIM_EDITION") {
-        let edition = raw.trim();
-        if !edition.is_empty() && edition != "full" && edition != "demo" {
+        // Exact match, no trimming: lib.rs compares option_env!("CONVSIM_EDITION")
+        // against "demo" byte for byte, so a padded "demo " (a stray newline in
+        // a shell export) must be rejected here rather than quietly compiled
+        // as the full app.
+        if !raw.is_empty() && raw != "full" && raw != "demo" {
             panic!(
-                "CONVSIM_EDITION must be \"full\" or \"demo\" (got {:?}). \
+                "CONVSIM_EDITION must be exactly \"full\" or \"demo\" (got {:?}). \
                  See docs/steam-next-fest-demo.md.",
                 raw
             );
         }
     }
+
+    // Shared data-root key (issue #495). Every edition keys its per-user data
+    // directory to the FULL app's bundle identifier so the demo and the full
+    // app share models, sessions and the logbook. Read it from tauri.conf.json
+    // here — the base config; the demo's overlay is applied by the Tauri CLI
+    // at build time, never to this file — so the value lib.rs uses can never
+    // drift from the identifier the full app actually installs under.
+    println!("cargo:rerun-if-changed=tauri.conf.json");
+    let conf = std::fs::read_to_string("tauri.conf.json")
+        .expect("tauri.conf.json must be readable next to build.rs");
+    let conf: serde_json::Value =
+        serde_json::from_str(&conf).expect("tauri.conf.json must be valid JSON");
+    let identifier = conf
+        .get("identifier")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .expect("tauri.conf.json must set a non-empty `identifier`");
+    println!("cargo:rustc-env=CONVSIM_DATA_ROOT_IDENTIFIER={identifier}");
 
     tauri_build::build()
 }

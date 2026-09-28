@@ -306,7 +306,7 @@ deliberately out of scope, and links to the acceptance criteria and docs.
 Conversation Simulator is **free and open source, and fairly priced**:
 
 - **GitHub — free.** Clone this repository, build it with the quickstart above,
-  and run it at no cost. The engine is Apache-2.0 and the four official packs are
+  and run it at no cost. The engine is Apache-2.0 and the five official packs are
   CC BY 4.0.
 - **Steam — $9.99.** The [Steam edition](publishing/STEAM_STORE_PAGE.md) is the
   same software, packaged: signed, notarized, auto-updating, Steam Deck–verified.

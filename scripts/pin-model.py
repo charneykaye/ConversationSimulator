@@ -46,29 +46,60 @@ def _get_json(url: str) -> object:
         return json.load(resp)
 
 
+def _post_form_json(url: str, fields: list[tuple[str, str]]) -> object:
+    data = urllib.parse.urlencode(fields).encode()
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method="POST",
+        headers={
+            "User-Agent": _UA,
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+        return json.load(resp)
+
+
+def _pick_lfs(entries: object, filename: str, repo: str, commit: str) -> tuple[str, int]:
+    """Return (sha256, size_bytes) for ``filename`` from a paths-info answer."""
+    if not isinstance(entries, list):
+        raise SystemExit(f"error: unexpected paths-info payload for {repo}@{commit}")
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("path") != filename:
+            continue
+        if entry.get("type") not in (None, "file"):
+            raise SystemExit(f"error: {filename} is a {entry.get('type')}, not a file, in {repo}@{commit}")
+        lfs = entry.get("lfs")
+        if not isinstance(lfs, dict) or not lfs.get("oid"):
+            raise SystemExit(
+                f"error: {filename} is not an LFS object in {repo}@{commit}; "
+                "there is no verifiable SHA-256 to pin"
+            )
+        return str(lfs["oid"]).lower(), int(lfs.get("size") or entry.get("size") or 0)
+    raise SystemExit(f"error: {filename} not found in {repo}@{commit}")
+
+
 def _resolve(repo: str, filename: str, revision: str) -> tuple[str, str, int]:
     """Return (commit_sha, sha256, size_bytes) for ``filename`` in ``repo``."""
     q = urllib.parse.quote
-    # /api/models/{repo}/revision/{rev} carries the resolved commit sha and the
-    # sibling list; /tree/{rev} carries per-file LFS metadata.
+    # /api/models/{repo}/revision/{rev} carries the resolved commit sha.
     info = _get_json(f"https://huggingface.co/api/models/{q(repo, safe='/')}/revision/{q(revision)}")
     if not isinstance(info, dict) or "sha" not in info:
         raise SystemExit(f"error: could not resolve revision {revision!r} of {repo}")
     commit = str(info["sha"])
 
-    tree = _get_json(f"https://huggingface.co/api/models/{q(repo, safe='/')}/tree/{commit}")
-    if not isinstance(tree, list):
-        raise SystemExit(f"error: unexpected tree payload for {repo}@{commit}")
-    for entry in tree:
-        if isinstance(entry, dict) and entry.get("path") == filename:
-            lfs = entry.get("lfs")
-            if not isinstance(lfs, dict) or not lfs.get("oid"):
-                raise SystemExit(
-                    f"error: {filename} is not an LFS object in {repo}@{commit}; "
-                    "there is no verifiable SHA-256 to pin"
-                )
-            return commit, str(lfs["oid"]).lower(), int(lfs.get("size") or entry.get("size") or 0)
-    raise SystemExit(f"error: {filename} not found in {repo}@{commit}")
+    # paths-info answers for an arbitrary path — a file in a subdirectory
+    # included (a common layout for larger GGUF repos) — with the same per-file
+    # LFS metadata as a tree listing, and without /tree/{rev}'s 1000-entry
+    # pagination. Same call huggingface_hub's get_paths_info makes.
+    entries = _post_form_json(
+        f"https://huggingface.co/api/models/{q(repo, safe='/')}/paths-info/{commit}",
+        [("paths", filename)],
+    )
+    sha256, size = _pick_lfs(entries, filename, repo, commit)
+    return commit, sha256, size
 
 
 def main() -> int:

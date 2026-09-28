@@ -8,6 +8,11 @@ summary: >-
   neighbourhood. The target language is French (fr). Difficulty controls
   language correction: easy = none, normal = light (implicit recasting),
   hard = explicit correction with practice prompts.
+# Target language first (issue #495): the setup page defaults to the first
+# entry and the demo card labels the conversation with it.
+supported_languages:
+  - fr
+  - en
 player_role:
   label: Language Learner
   brief: >-

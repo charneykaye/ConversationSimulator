@@ -37,6 +37,13 @@
       "minLength": 1,
       "maxLength": 500
     },
+    "supported_languages": {
+      "type": "array",
+      "description": "Languages this scenario can be played in, target language first: the first entry is the setup page's default and the language a card is labelled with. Optional — omit to inherit the pack manifest's list.",
+      "items": { "type": "string", "pattern": "^[a-z]{2,3}$" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
     "player_role": {
       "type": "object",
       "required": ["label", "brief"],

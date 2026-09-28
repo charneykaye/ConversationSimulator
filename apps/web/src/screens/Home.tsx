@@ -144,6 +144,32 @@ export default function Home() {
 
       {isDemo ? (
         <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          {/* The one download comes first when it is missing: the five Start
+              buttons below cannot do anything until the model is installed. */}
+          {showNoModelPrompt && (
+            <section aria-label={t('demo.home.noModel.heading')}>
+              <h2>{t('demo.home.noModel.heading')}</h2>
+              <p style={{ color: '#a1a1aa', fontSize: '0.875rem', marginBottom: '1rem' }}>
+                {t('demo.home.noModel.description')}
+              </p>
+              <Link
+                to="/model-manager"
+                data-testid="demo-install-model-link"
+                style={{
+                  fontSize: '0.875rem',
+                  padding: '0.45rem 1rem',
+                  borderRadius: '4px',
+                  background: 'rgba(99,102,241,0.85)',
+                  color: '#fff',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  display: 'inline-block',
+                }}
+              >
+                {t('demo.home.noModel.action')}
+              </Link>
+            </section>
+          )}
           <DemoConversations />
           <DemoUpsellCard />
         </div>
@@ -330,9 +356,15 @@ export default function Home() {
           </li>
           <li>
             {t('home.status.llm')}:{' '}
-            <Link to={isDemo ? '/model-manager' : '/settings'} style={{ textDecoration: 'none' }}>
+            {isDemo && llmReady ? (
+              // Nothing to change about a ready demo model, so no link to a
+              // manager whose only offer would be to reinstall it.
               <StatusBadge status={llmBadgeProps.status}>{llmBadgeProps.label}</StatusBadge>
-            </Link>
+            ) : (
+              <Link to={isDemo ? '/model-manager' : '/settings'} style={{ textDecoration: 'none' }}>
+                <StatusBadge status={llmBadgeProps.status}>{llmBadgeProps.label}</StatusBadge>
+              </Link>
+            )}
           </li>
           {/* Voice is not part of the demo; its readiness rows would only invite a
               download the demo never offers. */}
@@ -433,31 +465,6 @@ export default function Home() {
           )}
         </div>
       </section>
-
-      {showNoModelPrompt && isDemo && (
-        <section aria-label={t('demo.home.noModel.heading')} style={{ marginTop: '2rem' }}>
-          <h2>{t('demo.home.noModel.heading')}</h2>
-          <p style={{ color: '#a1a1aa', fontSize: '0.875rem', marginBottom: '1rem' }}>
-            {t('demo.home.noModel.description')}
-          </p>
-          <Link
-            to="/model-manager"
-            data-testid="demo-install-model-link"
-            style={{
-              fontSize: '0.875rem',
-              padding: '0.45rem 1rem',
-              borderRadius: '4px',
-              background: 'rgba(99,102,241,0.85)',
-              color: '#fff',
-              fontWeight: 600,
-              textDecoration: 'none',
-              display: 'inline-block',
-            }}
-          >
-            {t('demo.home.noModel.action')}
-          </Link>
-        </section>
-      )}
 
       {showNoModelPrompt && !isDemo && (
         <section aria-label={t('home.getStartedSection')} style={{ marginTop: '2rem' }}>

@@ -14,6 +14,7 @@ import { api } from '../api/client';
 import type { ApiError } from '../api/errors';
 import { ApiErrorView } from '../components/ApiErrorView';
 import { readPrivacyPref, PRIVACY_KEYS } from '../privacyPrefs';
+import { languageLabel } from '../lib/languageLabel';
 
 const DIFFICULTY_LABELS: Record<ScenarioDifficulty, string> = {
   warm:        'Warm-up',
@@ -37,30 +38,19 @@ function difficultyLabel(level: ScenarioDifficulty, option: DifficultyOption | u
   return option?.label ?? DIFFICULTY_LABELS[level] ?? level.charAt(0).toUpperCase() + level.slice(1);
 }
 
-const LANGUAGE_LABELS: Record<string, string> = {
-  en: 'English',
-  es: 'Spanish',
-  fr: 'French',
-  ja: 'Japanese',
-  de: 'German',
-  zh: 'Chinese',
-  pt: 'Portuguese',
-  it: 'Italian',
-  ko: 'Korean',
-  nl: 'Dutch',
-};
-
-function languageLabel(code: string): string {
-  return LANGUAGE_LABELS[code] ?? code;
-}
-
 interface Props {
   scenarioId: string;
   onSessionCreated: (session: SessionCreateResponse) => void;
   onBack: () => void;
+  /**
+   * Opens the model manager. Wired by the screen wrapper; when absent the
+   * missing-runtime hint is plain text. A callback rather than a <Link> keeps
+   * this page router-agnostic (it is rendered and tested without one).
+   */
+  onInstallModel?: () => void;
 }
 
-export function ScenarioSetupPage({ scenarioId, onSessionCreated, onBack }: Props) {
+export function ScenarioSetupPage({ scenarioId, onSessionCreated, onBack, onInstallModel }: Props) {
   const [scenario, setScenario] = useState<ScenarioInfo | null>(null);
   const [runtime, setRuntime] = useState<RuntimeReadiness>({
     llm_ready: false,
@@ -247,9 +237,32 @@ export function ScenarioSetupPage({ scenarioId, onSessionCreated, onBack }: Prop
               {formLevelErrors.map((e, i) => (
                 <p key={i} className="setup-missing-runtime-message">{e.message}</p>
               ))}
+              {/* A button into the Model Manager, not prose about Settings: the
+                  demo edition hides the model section of Settings, and
+                  /model-manager is the one repair path every edition has
+                  (issue #495). */}
               <p className="setup-missing-runtime-hint">
-                Go to <strong>Settings → Model Manager</strong> to install a model, then return
-                here to launch your scenario.
+                {onInstallModel ? (
+                  <button
+                    type="button"
+                    onClick={onInstallModel}
+                    data-testid="open-model-manager"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      font: 'inherit',
+                      color: '#a5b4fc',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Open the Model Manager
+                  </button>
+                ) : (
+                  <strong>Open the Model Manager</strong>
+                )}{' '}
+                to install a model, then return here to launch your scenario.
               </p>
             </div>
           )}

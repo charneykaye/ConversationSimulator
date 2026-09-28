@@ -99,10 +99,10 @@ function makeModelsResponse(overrides: Partial<ModelsResponse> = {}): ModelsResp
   }
 }
 
-function renderWizard() {
+function renderWizard(initialEntry = '/first-run') {
   return render(
     <MemoryRouter
-      initialEntries={['/first-run']}
+      initialEntries={[initialEntry]}
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
       <Routes>
@@ -1217,6 +1217,76 @@ describe('FirstRunWizard — demo edition', () => {
       await waitFor(() => expect(screen.getByTestId('home-page')).toBeInTheDocument())
       expect(screen.queryByTestId('library-page')).not.toBeInTheDocument()
       expect(localStorage.getItem(SETUP_KEYS.firstRunComplete)).toBe('true')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recovers from a model-warmup failure with a retry, not a chooser that only offers the same model', async () => {
+    // A low-RAM Next Fest machine: the download completes, the engine cannot
+    // start the model. The demo has no smaller tier, so "choose a smaller
+    // model" would loop straight back to the same download.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      renderWizard()
+      fireEvent.click(screen.getByRole('button', { name: /set me up/i }))
+      await screen.findByRole('heading', { name: /setting up your ai/i })
+      mockApi.getSetupInstallStatus.mockResolvedValue({ ok: true, data: {
+        ...RUNNING_JOB,
+        status: 'failed' as const,
+        stages: RUNNING_JOB.stages.map((s) =>
+          s.id === 'warmup'
+            ? { ...s, state: 'failed' as const, error: 'model warmup failed: insufficient RAM' }
+            : s.id === 'model' || s.id === 'verify'
+              ? { ...s, state: 'complete' as const }
+              : s,
+        ),
+        error_message: 'model warmup failed: insufficient RAM',
+      } })
+      await vi.advanceTimersByTimeAsync(2000)
+      await waitFor(() =>
+        expect(screen.getByRole('alert', { name: /model warmup error/i })).toBeInTheDocument(),
+      )
+      expect(screen.queryByRole('button', { name: /choose a smaller model/i })).not.toBeInTheDocument()
+      expect(screen.queryByText(/try a smaller model/i)).not.toBeInTheDocument()
+      expect(screen.getByText(/close other applications/i)).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /try again/i }))
+      expect(await screen.findByRole('heading', { name: /confirm model install/i })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: /choose how to get started/i })).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('can retry a resumed install that fails, although no model was chosen in this session', async () => {
+    // Relaunch mid-download: FirstRunGuard forwards the job id and the wizard
+    // opens straight on the progress step, so nothing has fetched the
+    // registry. If that job then fails, Retry must still have a model to
+    // confirm rather than rendering an empty page.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      mockApi.getSetupInstallStatus.mockResolvedValue({ ok: true, data: {
+        ...RUNNING_JOB,
+        id: 7,
+        status: 'failed' as const,
+        stages: RUNNING_JOB.stages.map((s) =>
+          s.id === 'model' ? { ...s, state: 'failed' as const, error: 'no network connection available' } : s,
+        ),
+        error_message: 'no network connection available',
+      } })
+      renderWizard('/first-run?resume_install=7')
+      await vi.advanceTimersByTimeAsync(2000)
+      await waitFor(() =>
+        expect(screen.getByRole('alert', { name: /network error/i })).toBeInTheDocument(),
+      )
+      expect(screen.queryByRole('button', { name: /choose a different option/i })).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /^retry$/i }))
+      expect(await screen.findByRole('heading', { name: /confirm model install/i })).toBeInTheDocument()
+      expect(screen.getByText('Qwen3 4B Instruct Q4_K_M')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: /confirm & install/i }))
+      await waitFor(() => expect(mockApi.startSetupInstall).toHaveBeenCalledWith('qwen3-4b-instruct-q4_k_m'))
     } finally {
       vi.useRealTimers()
     }

@@ -212,8 +212,15 @@ Configure these in Steamworks App Admin → General → Launch Options.
 | Platform | Executable | Arguments | Working directory | OS |
 |----------|-----------|-----------|------------------|----|
 | Windows | `ConversationSimulator.exe` | *(none)* | *(depot root — leave blank)* | Windows |
-| macOS | `ConversationSimulator.app/Contents/MacOS/ConversationSimulator` | *(none)* | *(depot root)* | macOS |
+| macOS | `Conversation Simulator.app/Contents/MacOS/convsim-desktop` | *(none)* | *(depot root)* | macOS |
 | Linux | `conversation-simulator` | *(none)* | *(depot root)* | Linux |
+
+**macOS launch options note:** The `.app` bundle takes Tauri's `productName`
+("Conversation Simulator", with the space); the executable inside it keeps the
+Cargo package name `convsim-desktop` because no `mainBinaryName` is set and
+Tauri does not rename the binary to the product name. Confirm the exact path
+against the uploaded build (Steamworks → Builds → *View Manifest*) before
+saving the launch option.
 
 **Windows launch options note:** The working directory field should be left blank
 (or set to `.`); Steam resolves it relative to the depot install root, which is

@@ -120,7 +120,9 @@ demo before the fest is the plan, not a fallback.
 **A separate free Steam app.** Steam demos are their own app (created from the
 base app's Steamworks page under *Store Presence → Demo*), with their own
 App ID, depots and builds; Next Fest requires a demo app attached to a base app
-that is *Coming Soon* or released. A `demo` branch of the paid app cannot be
+that is *Coming Soon* — not yet released, and never in a previous Next Fest
+(Valve's rules are summarised in the runbook's eligibility section). A `demo`
+branch of the paid app cannot be
 free and cannot be the Next Fest demo. The demo app is registered as
 `STEAM_DEMO_APP_ID` plus three `STEAM_DEMO_DEPOT_*_ID` repository variables,
 kept apart from the paid app's so an upload can never cross over.
@@ -154,8 +156,10 @@ the *full app's* bundle identifier (`com.outrightmental.convsim`), not its own,
 so the demo and the full app read and write the same `CONVSIM_DATA_ROOT`. A
 player who downloads the 2.5 GB model in the demo and then buys the full game
 does not download it again; their sessions, transcripts and logbook are there
-on first launch. The demo's scenario filter is applied at read time, so
-nothing the full app stores is ever hidden or lost by the demo. Steam
+on first launch. The demo never deletes or rewrites what the full app stores:
+its scenario filter narrows what it *lists* (the five cards, their packs), and
+the privacy controls it keeps (sessions, transcripts, clear-data) see the whole
+directory. Steam
 achievements and Steam Cloud stay base-app-only (a Steam demo cannot award the
 base app's achievements). "Clear local data" in the demo clears the shared
 directory, and its copy says so.

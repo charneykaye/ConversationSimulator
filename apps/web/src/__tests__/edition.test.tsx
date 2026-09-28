@@ -4,7 +4,7 @@
 // one model and five conversations. These tests cover the edition module
 // itself and the demo-specific rendering of the screens it trims.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { HealthResponse, ScenarioInfo } from '@convsim/shared'
 
@@ -17,8 +17,10 @@ vi.mock('@convsim/ui', () => ({
 }))
 
 import {
+  EDITION_POLL_INTERVAL_MS,
   EditionContext,
   EditionProvider,
+  FULL_APP_STEAM_APP_ID,
   FULL_APP_STEAM_URL,
   buildEdition,
   reconcileEdition,
@@ -82,6 +84,30 @@ const DEMO_HEALTH = makeHealth({
   edition: 'demo',
   demo: { model_id: 'qwen3-4b-instruct-q4_k_m', scenario_ids: FIVE_IDS, pack_ids: [] },
 })
+
+// What the demo engine's /api/models returns: exactly one registry model.
+const DEMO_MODELS = {
+  registry: [{
+    id: 'qwen3-4b-instruct-q4_k_m', name: 'Qwen3 4B Instruct Q4_K_M', provider: 'huggingface', family: 'qwen3',
+    role: 'starter', format: 'gguf', license_spdx: 'Apache-2.0', license_url: null, source_type: 'registry',
+    download_url: 'https://example.invalid/q.gguf', sha256: 'a'.repeat(64), size_gb: 2.6, min_vram_gb: 4,
+    recommended_vram_gb: 6, context_length: 8192, registered_at: '2026-01-01T00:00:00.000Z',
+  }],
+  installed: [],
+  ollama_models: [],
+  active: { runtime_id: null, model_id: null },
+  runtime_health: {
+    runtime_id: 'none', runtime_name: 'llama.cpp', status: 'unavailable', model_id: null,
+    latency_ms: null, message: 'No model configured', checked_at: '2026-01-01T00:00:00.000Z',
+  },
+  total: 1,
+  last_benchmark: null,
+}
+
+function okResponse(body: object) {
+  const text = JSON.stringify(body)
+  return Promise.resolve({ ok: true, status: 200, statusText: 'OK', json: () => Promise.resolve(body), text: () => Promise.resolve(text) })
+}
 
 // Route fetch by URL so Home's health / packs / logbook / scenarios calls all resolve.
 function stubFetches(health: object, scenarios: object[] = [], packsTotal = 5) {
@@ -200,6 +226,33 @@ describe('EditionProvider', () => {
     )
     await waitFor(() => expect(screen.getByTestId('probe').textContent).toBe('demo/server/5'))
   })
+
+  it('keeps asking until the engine answers, then stops', async () => {
+    // In the desktop shell the first call usually lands before the sidecar
+    // listens; the provider must not give up on the engine's edition then.
+    vi.stubEnv('VITE_CONVSIM_EDITION', '')
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      let calls = 0
+      vi.stubGlobal('fetch', vi.fn(() => {
+        calls += 1
+        if (calls === 1) return Promise.reject(new Error('engine not up yet'))
+        return okResponse(DEMO_HEALTH)
+      }))
+      render(
+        <EditionProvider>
+          <Probe />
+        </EditionProvider>,
+      )
+      await vi.advanceTimersByTimeAsync(EDITION_POLL_INTERVAL_MS + 50)
+      await waitFor(() => expect(screen.getByTestId('probe').textContent).toBe('demo/server/5'))
+      const settled = calls
+      await vi.advanceTimersByTimeAsync(EDITION_POLL_INTERVAL_MS * 3)
+      expect(calls).toBe(settled)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 // ── Demo components ───────────────────────────────────────────────────────────
@@ -239,6 +292,39 @@ describe('DemoUpsellCard', () => {
     expect(screen.queryByText(/creator workbench/i)).not.toBeInTheDocument()
     expect(screen.getByTestId('demo-upsell-link')).toBeInTheDocument()
   })
+
+  it('describes the full library accurately (five player-facing packs, twenty conversations)', () => {
+    render(<DemoUpsellCard />)
+    expect(screen.getByText(/20 conversations across five packs/i)).toBeInTheDocument()
+  })
+
+  describe('in the desktop shell', () => {
+    function installTauri(overlayShown: boolean) {
+      const invoke = vi.fn(async (cmd: string) => (cmd === 'steam_open_store_page' ? overlayShown : undefined))
+      Object.defineProperty(window, '__TAURI__', { value: { core: { invoke } }, configurable: true })
+      return invoke
+    }
+    afterEach(() => {
+      delete (window as { __TAURI__?: unknown }).__TAURI__
+    })
+
+    it('opens the store page in the Steam overlay when Steam shows it', async () => {
+      const invoke = installTauri(true)
+      render(<DemoUpsellCard />)
+      fireEvent.click(screen.getByTestId('demo-upsell-link'))
+      await waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith('steam_open_store_page', { appId: FULL_APP_STEAM_APP_ID }),
+      )
+      expect(invoke).not.toHaveBeenCalledWith('plugin:shell|open', expect.anything())
+    })
+
+    it('falls back to the browser when there is no overlay to show', async () => {
+      const invoke = installTauri(false)
+      render(<DemoUpsellCard />)
+      fireEvent.click(screen.getByTestId('demo-upsell-link'))
+      await waitFor(() => expect(invoke).toHaveBeenCalledWith('plugin:shell|open', { path: FULL_APP_STEAM_URL }))
+    })
+  })
 })
 
 describe('DemoConversations', () => {
@@ -257,13 +343,16 @@ describe('DemoConversations', () => {
     expect(cards.map((c) => within(c).getByRole('heading', { level: 3 }).textContent)).toEqual(
       FIVE.map((s) => s.title),
     )
+    // WebKit drops list semantics from `list-style: none` lists unless the
+    // role is explicit; this list is the demo's navigation.
+    expect(within(screen.getByTestId('demo-conversations')).getByRole('list')).toHaveAttribute('role', 'list')
     expect(within(cards[0]).getByRole('link', { name: /start the behavioral interview/i })).toHaveAttribute(
       'href',
       '/setup/behavioral_interview',
     )
   })
 
-  it('labels a non-English conversation with its language', async () => {
+  it('labels a non-English conversation with its language name, never the code', async () => {
     stubFetches(DEMO_HEALTH, FIVE)
     render(
       <MemoryRouter future={ROUTER_FUTURE}>
@@ -271,7 +360,9 @@ describe('DemoConversations', () => {
       </MemoryRouter>,
     )
     const cards = await screen.findAllByTestId('demo-conversation-card')
-    expect(cards[4]).toHaveTextContent(/in es/)
+    expect(cards[4]).toHaveTextContent(/in Spanish/)
+    expect(cards[4]).not.toHaveTextContent(/in es\b/)
+    expect(cards[0]).not.toHaveTextContent(/in English/)
   })
 
   it('shows an error when the scenario list cannot be loaded', async () => {
@@ -344,6 +435,20 @@ describe('Home — demo edition', () => {
     expect(link).toHaveAttribute('href', '/model-manager')
     expect(screen.queryByRole('heading', { name: /no model configured/i })).not.toBeInTheDocument()
     expect(screen.queryByText(/connect ollama/i)).not.toBeInTheDocument()
+    // The download comes first on the page: the five Start buttons below it
+    // cannot do anything until the model is installed.
+    await screen.findAllByTestId('demo-conversation-card')
+    expect(screen.getAllByRole('link')[0]).toBe(link)
+    // Until then the LLM badge is the same repair path.
+    expect(screen.getByRole('link', { name: /not installed/i })).toHaveAttribute('href', '/model-manager')
+  })
+
+  it('shows a ready model as a plain badge, not a link to a manager that would only reinstall it', async () => {
+    stubFetches(DEMO_HEALTH, FIVE)
+    renderHome()
+    await screen.findAllByTestId('demo-conversation-card')
+    expect(screen.getByText('Qwen3 4B')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Qwen3 4B' })).not.toBeInTheDocument()
   })
 
   it('keeps the engine status and help sections', async () => {
@@ -413,8 +518,24 @@ describe('App routes — demo edition', () => {
     expect(screen.queryByRole('heading', { name: /creator workbench/i })).not.toBeInTheDocument()
   })
 
-  it('still serves the model manager, settings and support', () => {
-    renderAt('/settings')
-    expect(screen.getByRole('heading', { name: /^settings$/i })).toBeInTheDocument()
+  it.each([
+    ['/settings', /^settings$/i],
+    ['/support', /^support$/i],
+  ])('still serves %s', (path, heading) => {
+    renderAt(path)
+    expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument()
+  })
+
+  it("still serves the model manager — the demo's one repair path", async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (url.includes('/models')) return okResponse(DEMO_MODELS)
+      if (url.includes('/preflight')) return okResponse({ overall: 'pass', checks: [], ran_at: '2026-01-01T00:00:00.000+00:00' })
+      return new Promise(() => {})
+    }))
+    renderAt('/model-manager')
+    expect(await screen.findByRole('heading', { name: /set up your model/i })).toBeInTheDocument()
+    expect(screen.getByText(/the demo uses one ai model/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /install qwen3 4b/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /browse ollama models/i })).not.toBeInTheDocument()
   })
 })

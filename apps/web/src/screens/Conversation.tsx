@@ -925,8 +925,9 @@ export default function Conversation() {
               fontSize: '0.8rem',
             }}
           >
-            NPC is taking longer than usual. The model may be slow on this hardware. You can
-            adjust settings or try a smaller model.
+            {isDemo
+              ? 'NPC is taking longer than usual. The model may be slow on this hardware; closing other apps usually helps.'
+              : 'NPC is taking longer than usual. The model may be slow on this hardware. You can adjust settings or try a smaller model.'}
           </div>
         )}
       </div>

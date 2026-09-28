@@ -115,6 +115,12 @@ export function useSetupFlow(
   // (not necessarily role=starter when CONVSIM_DEMO_MODEL_ID pins another
   // tier), and a finished install lands on the demo Home — there is no library.
   const isDemo = useIsDemo()
+  // Read through a ref inside the async effects below: the edition can still
+  // flip while 'loading' is in flight (a bundle without a build flag adopting
+  // the engine's answer), and re-running that effect would race two
+  // model/preflight pipelines against one `intentRef`.
+  const isDemoRef = useRef(isDemo)
+  isDemoRef.current = isDemo
   const [step, setStep] = useState<SetupFlowStep>(initialStep)
   const [modelsData, setModelsData] = useState<ModelsResponse | null>(null)
   const [loadError, setLoadError] = useState<ApiError | null>(null)
@@ -194,7 +200,7 @@ export function useSetupFlow(
       intentRef.current = null
 
       if (intent === 'set-me-up') {
-        const rec = pickRecommendedModel(modelsResult.data, isDemo)
+        const rec = pickRecommendedModel(modelsResult.data, isDemoRef.current)
         if (!rec) { setStep('choose'); return }
         setSelectedModel(rec)
         setActionLoading(true)
@@ -232,7 +238,30 @@ export function useSetupFlow(
       setLoadError({ kind: 'network', message: err instanceof Error ? err.message : 'Failed to load model information.' })
       setStep('load-error')
     })
-  }, [step, isDemo])
+  }, [step])
+
+  // Resume path: the wizard can open straight on 'installing' with a job id
+  // forwarded by FirstRunGuard, in which case nothing above has fetched the
+  // registry and no model is selected. Fetch it once and seed the selection
+  // from the job's registry_id, so a failure on the resumed job still has a
+  // model to Retry (otherwise Retry → confirm-install rendered an empty page;
+  // in the demo that was the only exit, issue #495).
+  useEffect(() => {
+    if (step !== 'installing' || modelsData != null) return
+    let cancelled = false
+    void api.getModels().then((r) => {
+      if (!cancelled && r.ok) setModelsData(r.data)
+    })
+    return () => { cancelled = true }
+  }, [step, modelsData])
+
+  useEffect(() => {
+    if (step !== 'installing' || selectedModel != null || modelsData == null) return
+    const wanted = setupInstallJob?.registry_id ?? null
+    const fromJob = wanted ? modelsData.registry.find((m) => m.id === wanted) ?? null : null
+    const model = fromJob ?? pickRecommendedModel(modelsData, isDemoRef.current)
+    if (model) setSelectedModel(model)
+  }, [step, selectedModel, modelsData, setupInstallJob])
 
   // React to pipeline job terminal states while on the 'installing' step.
   useEffect(() => {

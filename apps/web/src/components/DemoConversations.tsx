@@ -14,6 +14,7 @@ import type { ScenarioInfo } from '@convsim/shared'
 import { useScenarios } from '../api/useScenarios'
 import { useEdition } from '../edition'
 import { useTranslation } from '../i18n'
+import { languageLabel } from '../lib/languageLabel'
 
 // The scripted tutorial is internal content (issue #473) and never a card.
 const _HIDDEN_SCENARIO_IDS = new Set(['first_words_tutorial'])
@@ -62,6 +63,9 @@ export default function DemoConversations() {
 
       {cards.length > 0 && (
         <ol
+          // Explicit list role: WebKit drops list semantics from `list-style:
+          // none` lists, and this list IS the demo's navigation.
+          role="list"
           style={{
             listStyle: 'none',
             padding: 0,
@@ -104,8 +108,8 @@ export default function DemoConversations() {
               <p style={{ margin: '0.15rem 0 0', fontSize: '0.8rem', color: '#71717a' }}>
                 {t('demo.conversations.role', { role: s.player_role.label })} ·{' '}
                 {s.estimated_length_label}
-                {s.supported_languages.length > 0 && !s.supported_languages.includes('en')
-                  ? ` · ${t('demo.conversations.language', { code: s.supported_languages[0] })}`
+                {s.supported_languages.length > 0 && s.supported_languages[0] !== 'en'
+                  ? ` · ${t('demo.conversations.language', { language: languageLabel(s.supported_languages[0]) })}`
                   : ''}
               </p>
               <Link

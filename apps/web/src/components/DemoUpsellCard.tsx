@@ -5,8 +5,32 @@
 // demo hides is "disabled with upsell" through this card rather than through
 // greyed-out controls scattered across the UI, so the demo reads as a complete
 // small product rather than a crippled large one.
+import type { MouseEvent } from 'react'
 import { useTranslation } from '../i18n'
-import { FULL_APP_STEAM_URL } from '../edition'
+import { FULL_APP_STEAM_APP_ID, FULL_APP_STEAM_URL } from '../edition'
+import { isDesktopShell, openExternal } from '../lib/openExternal'
+
+type TauriInvoke = <T>(cmd: string, args?: unknown) => Promise<T>
+type TauriWindow = { __TAURI__?: { core?: { invoke?: TauriInvoke } } }
+
+/**
+ * Open the full game's store page. Under Steam the overlay's store view keeps
+ * the player inside the demo (Valve's recommended demo → wishlist/purchase
+ * path); anywhere else — the overlay disabled, not launched through Steam, or
+ * a plain browser — the page opens in the default browser instead.
+ */
+export async function openFullAppStorePage(): Promise<void> {
+  const invoke = (window as TauriWindow).__TAURI__?.core?.invoke
+  if (invoke) {
+    try {
+      const shown = await invoke<boolean>('steam_open_store_page', { appId: FULL_APP_STEAM_APP_ID })
+      if (shown) return
+    } catch {
+      // Not a Steam build (command missing) — fall through to the browser.
+    }
+  }
+  await openExternal(FULL_APP_STEAM_URL)
+}
 
 interface DemoUpsellCardProps {
   /** Compact variant for the end of a debrief. */
@@ -16,6 +40,14 @@ interface DemoUpsellCardProps {
 export default function DemoUpsellCard({ compact = false }: DemoUpsellCardProps) {
   const { t } = useTranslation()
   const bullets = ['library', 'workbench', 'models', 'voice'] as const
+
+  function handleCtaClick(e: MouseEvent<HTMLAnchorElement>) {
+    // In a browser the anchor itself is the right thing; only the desktop
+    // shell has a Steam overlay to try first.
+    if (!isDesktopShell()) return
+    e.preventDefault()
+    void openFullAppStorePage()
+  }
 
   return (
     <section
@@ -66,6 +98,7 @@ export default function DemoUpsellCard({ compact = false }: DemoUpsellCardProps)
         target="_blank"
         rel="noreferrer"
         data-testid="demo-upsell-link"
+        onClick={handleCtaClick}
         style={{
           display: 'inline-block',
           padding: '0.45rem 1rem',

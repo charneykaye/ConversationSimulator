@@ -128,10 +128,20 @@ def test_tutorial_scenario_canonical_fields(seeded_client):
 
 
 def test_language_cafe_languages_come_from_pack_manifest(seeded_client):
-    """Language Café's manifest declares en/es/fr/ja — cards must surface them."""
+    """Language Café's manifest declares en/es/fr/ja — cards must surface them.
+
+    A scenario without its own list inherits all four from the manifest. One
+    that declares ``supported_languages`` itself (the three target-language
+    scenarios, target first — issue #495) surfaces exactly its own list, so
+    the setup page defaults to the language the card promises.
+    """
     resp = seeded_client.get("/api/scenarios", params={"pack": "official.language_cafe"})
     assert resp.status_code == 200
-    scenarios = resp.json()
+    scenarios = {s["scenario_id"]: s for s in resp.json()}
     assert scenarios, "language cafe scenarios must be seeded"
-    for s in scenarios:
-        assert set(s["supported_languages"]) == {"en", "es", "fr", "ja"}
+    assert set(scenarios["english_small_talk"]["supported_languages"]) == {"en", "es", "fr", "ja"}
+    assert scenarios["spanish_coffee"]["supported_languages"] == ["es", "en"]
+    assert scenarios["french_travel_checkin"]["supported_languages"] == ["fr", "en"]
+    assert scenarios["japanese_convenience_store"]["supported_languages"] == ["ja", "en"]
+    for s in scenarios.values():
+        assert s["supported_languages"], "every card carries a non-empty language list"

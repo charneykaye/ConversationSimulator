@@ -23,11 +23,16 @@ export default function ScenarioSetup() {
     navigate(-1)
   }
 
+  function handleInstallModel() {
+    navigate('/model-manager')
+  }
+
   return (
     <ScenarioSetupPage
       scenarioId={scenarioId!}
       onSessionCreated={handleSessionCreated}
       onBack={handleBack}
+      onInstallModel={handleInstallModel}
     />
   )
 }
